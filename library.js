@@ -70,6 +70,13 @@ window.LIBRARY = [
   "u": "https://archive.org/download/NightOfTheLivingDead1968-Restored/Notld1968Restoration-desktop.mp4"
  },
  {
+  "id": "hauntedhill",
+  "title": "House on Haunted Hill",
+  "year": 1959,
+  "len": 4483,
+  "u": "https://archive.org/download/The_House_On_Haunted_Hill/The_House_On_Haunted_Hill.mp4"
+ },
+ {
   "id": "littleshop",
   "title": "The Little Shop of Horrors",
   "year": 1960,
@@ -524,6 +531,13 @@ window.LIBRARY = [
   "u": "https://archive.org/download/his_girl_friday/his_girl_friday.mp4"
  },
  {
+  "id": "hitchhiker",
+  "title": "The Hitch-Hiker",
+  "year": 1953,
+  "len": 4248,
+  "u": "https://archive.org/download/Hitch_Hiker/Hitch-Hiker.mp4"
+ },
+ {
   "id": "dementia13",
   "title": "Dementia 13",
   "year": 1963,
@@ -550,5 +564,12 @@ window.LIBRARY = [
   "year": 1959,
   "len": 5129,
   "u": "https://archive.org/download/TeenagersFromOuterSpace1959/TeenagersFromOuterSpace1959DavidLove.mp4"
+ },
+ {
+  "id": "stooges",
+  "title": "The Three Stooges: Disorder in the Court",
+  "year": 1936,
+  "len": 998,
+  "u": "https://archive.org/download/three-stooges-disorder-in-the-court-blu-ray-restoration/Three_Stooges_Disorder_In_The_Court_(Blu-ray_restoration).mp4"
  }
 ];

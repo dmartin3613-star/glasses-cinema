@@ -1,6 +1,6 @@
-var CACHE = 'glasses-cinema-v3';
+var CACHE = 'glasses-cinema-v4';
 var SHELL = ['./', './index.html', './app.js', './library.js', './manifest.json', './icon.png',
-  './media/pioneer.jpg','./media/lastman.jpg','./media/terror.jpg','./media/notld.jpg','./media/littleshop.jpg','./media/bevhill.jpg','./media/hisgirl.jpg','./media/dementia13.jpg','./media/reefer.jpg','./media/teenagers.jpg'];
+  './media/pioneer.jpg','./media/lastman.jpg','./media/terror.jpg','./media/hauntedhill.jpg','./media/hitchhiker.jpg','./media/stooges.jpg','./media/notld.jpg','./media/littleshop.jpg','./media/bevhill.jpg','./media/hisgirl.jpg','./media/dementia13.jpg','./media/reefer.jpg','./media/teenagers.jpg'];
 self.addEventListener('install', function (e) { e.waitUntil(caches.open(CACHE).then(function (c) { return c.addAll(SHELL); })); self.skipWaiting(); });
 self.addEventListener('activate', function (e) {
   e.waitUntil(caches.keys().then(function (ks) { return Promise.all(ks.filter(function (k) { return k !== CACHE; }).map(function (k) { return caches.delete(k); })); }));
