@@ -87,7 +87,9 @@
 
   function renderHome() {
     mode = 'home';
-    buildRows(); renderRows(); updateHome();
+    var prevName = rows[rowIdx] && rows[rowIdx].name;
+    buildRows();
+    if (prevName) for (var i = 0; i < rows.length; i++) if (rows[i].name === prevName) { rowIdx = i; break; } renderRows(); updateHome();
     show('home');
   }
   function selectedItem() { var r = rows[rowIdx]; return r.items[colIdx[r.name] || 0]; }
