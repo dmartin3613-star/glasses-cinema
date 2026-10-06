@@ -21,7 +21,7 @@
   #card{position:absolute;left:60px;top:70px;width:480px;height:400px;border-radius:18px;
     background:#0b0b0b;display:flex;flex-direction:column;align-items:center;padding:16px;cursor:pointer}
   #card img{width:440px;height:240px;object-fit:cover;border-radius:10px;background:#111}
-  #card h1{font-size:30px;margin-top:16px;text-align:center;line-height:1.1}
+  #card h1{font-size:28px;margin-top:16px;text-align:center;line-height:1.1}
   #card .meta{font-size:20px;color:#bdbdbd;margin-top:8px}
   #card .resume{font-size:18px;color:#ffd166;margin-top:6px;min-height:22px}
   .arrow{position:absolute;top:250px;font-size:40px;color:#7fe6ff}
@@ -31,15 +31,15 @@
   #net{position:absolute;top:24px;right:24px;font-size:16px;color:#ff8a8a}
 
   /* Player */
-  #player video{position:absolute;left:0;top:131px;width:600px;height:338px;background:#000;object-fit:contain}
+  #player video{position:absolute;left:0;top:75px;width:600px;height:450px;background:#000;object-fit:contain}
   #hud{position:absolute;inset:0;transition:opacity 300ms}
   #hud.hide{opacity:0}
-  #ptitle{position:absolute;top:40px;left:30px;right:30px;font-size:24px;text-align:center}
-  #state{position:absolute;top:80px;left:0;right:0;text-align:center;font-size:20px;color:#7fe6ff}
-  #bar{position:absolute;left:40px;right:40px;bottom:96px;height:8px;border-radius:4px;background:#333}
+  #ptitle{position:absolute;top:22px;left:30px;right:30px;font-size:24px;text-align:center}
+  #state{position:absolute;top:290px;left:0;right:0;text-align:center;font-size:20px;color:#7fe6ff}
+  #bar{position:absolute;left:40px;right:40px;bottom:62px;height:8px;border-radius:4px;background:#333}
   #fill{height:100%;width:0;border-radius:4px;background:#00d4ff}
-  #time{position:absolute;left:40px;right:40px;bottom:60px;display:flex;justify-content:space-between;font-size:18px;color:#ccc}
-  #keys{position:absolute;bottom:20px;left:0;right:0;text-align:center;font-size:16px;color:#8a8a8a}
+  #time{position:absolute;left:40px;right:40px;bottom:30px;display:flex;justify-content:space-between;font-size:18px;color:#ccc}
+  #keys{position:absolute;bottom:4px;left:0;right:0;text-align:center;font-size:16px;color:#8a8a8a}
   #toast{position:absolute;top:270px;left:0;right:0;text-align:center;font-size:44px;font-weight:700;
     color:#fff;text-shadow:0 0 12px #000;opacity:0;transition:opacity 250ms}
   #credits{position:absolute;inset:0;padding:40px;font-size:17px;line-height:1.45;color:#ddd}
@@ -49,7 +49,7 @@
 </head>
 <body>
 <section id="lib" class="screen on">
-  <header>Glasses Cinema</header>
+  <header id="hdr">Glasses Cinema</header>
   <div id="net"></div>
   <span id="prev" class="arrow">&#8249;</span>
   <div id="card" class="focusable" tabindex="0">
@@ -60,7 +60,7 @@
   </div>
   <span id="next" class="arrow">&#8250;</span>
   <div id="dots"></div>
-  <div id="hint">Swipe to browse &middot; pinch to play &middot; swipe down for credits</div>
+  <div id="hint"></div>
 </section>
 
 <section id="player" class="screen">
@@ -70,7 +70,7 @@
     <div id="state"></div>
     <div id="bar"><div id="fill"></div></div>
     <div id="time"><span id="cur">0:00</span><span id="dur">0:00</span></div>
-    <div id="keys">Pinch play/pause &middot; left/right 30s &middot; up/down volume</div>
+    
   </div>
   <div id="toast"></div>
 </section>
@@ -83,6 +83,7 @@
   </div>
 </section>
 
+<script src="library.js"></script>
 <script src="app.js"></script>
 </body>
 </html>
