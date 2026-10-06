@@ -12,14 +12,36 @@
     font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
   .screen{position:absolute;inset:0;width:600px;height:600px;display:none}
   .screen.on{display:block}
-  .focusable{outline:none;border:3px solid transparent;transition:border-color 150ms,box-shadow 150ms}
-  .focusable:focus{border-color:#00d4ff;box-shadow:0 0 20px rgba(0,212,255,.45)}
+  .focusable{outline:none}
+  #net{position:absolute;top:16px;right:22px;font-size:16px;color:#ff8a8a;z-index:5}
 
-  /* Library */
+  /* Home: category rows */
+  #home .brand{position:absolute;top:14px;left:24px;font-size:18px;letter-spacing:.14em;text-transform:uppercase;color:#7fe6ff}
+  #rowsView{position:absolute;top:48px;left:0;width:600px;height:400px;overflow:hidden}
+  #rows{position:absolute;left:0;top:0;width:600px;transition:transform 220ms ease}
+  .row{height:168px;padding-left:24px}
+  .row h2{font-size:20px;font-weight:700;color:#cfcfcf;height:34px;line-height:34px}
+  .row.cur h2{color:#fff}
+  .strip{position:relative;height:126px;overflow:visible;white-space:nowrap;transition:transform 220ms ease}
+  .tile{display:inline-block;position:relative;width:200px;height:116px;margin:5px 14px 5px 0;border-radius:12px;
+    overflow:hidden;background:#111;border:3px solid transparent;vertical-align:top}
+  .tile img{width:100%;height:100%;object-fit:cover;display:block;opacity:.8}
+  .tile .tag{position:absolute;left:8px;bottom:6px;right:8px;font-size:15px;font-weight:600;white-space:nowrap;
+    overflow:hidden;text-overflow:ellipsis;text-shadow:0 1px 4px #000,0 0 8px #000}
+  .tile .prog{position:absolute;left:0;bottom:0;height:5px;background:#ffd166}
+  .row.cur .tile.sel{border-color:#00d4ff;box-shadow:0 0 18px rgba(0,212,255,.5)}
+  .row.cur .tile.sel img{opacity:1}
+  #detail{position:absolute;left:24px;right:24px;bottom:18px;height:118px;border-top:1px solid #222;padding-top:12px}
+  #dTitle{font-size:26px;font-weight:700;line-height:1.15;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  #dMeta{font-size:19px;color:#bdbdbd;margin-top:6px}
+  #dResume{font-size:17px;color:#ffd166;margin-top:6px;min-height:20px}
+
+  /* Episode picker */
   #lib header{position:absolute;top:22px;left:0;right:0;text-align:center;font-size:20px;
     letter-spacing:.12em;text-transform:uppercase;color:#7fe6ff}
   #card{position:absolute;left:60px;top:70px;width:480px;height:400px;border-radius:18px;
-    background:#0b0b0b;display:flex;flex-direction:column;align-items:center;padding:16px;cursor:pointer}
+    background:#0b0b0b;display:flex;flex-direction:column;align-items:center;padding:16px;
+    border:3px solid #00d4ff;box-shadow:0 0 20px rgba(0,212,255,.45)}
   #card img{width:440px;height:240px;object-fit:cover;border-radius:10px;background:#111}
   #card h1{font-size:28px;margin-top:16px;text-align:center;line-height:1.1}
   #card .meta{font-size:20px;color:#bdbdbd;margin-top:8px}
@@ -28,7 +50,6 @@
   #prev{left:16px}#next{right:16px}
   #dots{position:absolute;bottom:72px;left:0;right:0;text-align:center;font-size:18px;color:#888}
   #hint{position:absolute;bottom:30px;left:0;right:0;text-align:center;font-size:17px;color:#9a9a9a}
-  #net{position:absolute;top:24px;right:24px;font-size:16px;color:#ff8a8a}
 
   /* Player */
   #player video{position:absolute;left:0;top:75px;width:600px;height:450px;background:#000;object-fit:contain}
@@ -39,18 +60,28 @@
   #bar{position:absolute;left:40px;right:40px;bottom:62px;height:8px;border-radius:4px;background:#333}
   #fill{height:100%;width:0;border-radius:4px;background:#00d4ff}
   #time{position:absolute;left:40px;right:40px;bottom:30px;display:flex;justify-content:space-between;font-size:18px;color:#ccc}
-  #keys{position:absolute;bottom:4px;left:0;right:0;text-align:center;font-size:16px;color:#8a8a8a}
   #toast{position:absolute;top:270px;left:0;right:0;text-align:center;font-size:44px;font-weight:700;
     color:#fff;text-shadow:0 0 12px #000;opacity:0;transition:opacity 250ms}
+
   #credits{position:absolute;inset:0;padding:40px;font-size:17px;line-height:1.45;color:#ddd}
   #credits h2{font-size:24px;color:#7fe6ff;margin-bottom:14px}
-  #credits button{margin-top:18px;font-size:20px;color:#fff;background:#111;border-radius:12px;padding:12px 24px;min-height:60px}
 </style>
 </head>
 <body>
-<section id="lib" class="screen on">
-  <header id="hdr">Glasses Cinema</header>
-  <div id="net"></div>
+<div id="net"></div>
+
+<section id="home" class="screen on">
+  <div class="brand">Glasses Cinema</div>
+  <div id="rowsView"><div id="rows"></div></div>
+  <div id="detail">
+    <div id="dTitle"></div>
+    <div id="dMeta"></div>
+    <div id="dResume"></div>
+  </div>
+</section>
+
+<section id="lib" class="screen">
+  <header id="hdr"></header>
   <span id="prev" class="arrow">&#8249;</span>
   <div id="card" class="focusable" tabindex="0">
     <img id="poster" alt="">
@@ -60,7 +91,7 @@
   </div>
   <span id="next" class="arrow">&#8250;</span>
   <div id="dots"></div>
-  <div id="hint"></div>
+  <div id="hint">Swipe left/right for episodes &middot; up/down for seasons</div>
 </section>
 
 <section id="player" class="screen">
@@ -70,7 +101,6 @@
     <div id="state"></div>
     <div id="bar"><div id="fill"></div></div>
     <div id="time"><span id="cur">0:00</span><span id="dur">0:00</span></div>
-    
   </div>
   <div id="toast"></div>
 </section>
@@ -79,10 +109,11 @@
   <div id="credits">
     <h2>Credits</h2>
     <div id="creditList"></div>
-    <button id="closeCredits" class="focusable" tabindex="0">Back</button>
+    <p style="margin-top:18px;color:#7fe6ff">Swipe back or pinch to return</p>
   </div>
 </section>
 
+<div id="focusSink" class="focusable" tabindex="0" style="position:absolute;width:1px;height:1px;opacity:0"></div>
 <script src="library.js"></script>
 <script src="app.js"></script>
 </body>

@@ -1,10 +1,13 @@
 (function () {
-  var LIB = window.LIBRARY;
+  var LIB = window.LIBRARY, CATS = window.CATEGORIES;
+  var BY = {}; LIB.forEach(function (x) { BY[x.id] = x; });
   var KEY = 'gc_positions_v2';
   var $ = function (id) { return document.getElementById(id); };
   var vid = $('vid');
-  var homeIdx = 0, epIdx = 0, mode = 'home';   // mode: home | show | player | credits
-  var current = null, currentShow = null, hudTimer = null, toastTimer = null;
+  var mode = 'home';            // home | show | player | credits
+  var rows = [], rowIdx = 0, colIdx = {};
+  var epIdx = 0, current = null, currentShow = null, hudTimer = null, toastTimer = null;
+  var TILE_W = 214, ROW_H = 168;
 
   function fmt(s) {
     s = Math.max(0, Math.floor(s || 0));
@@ -20,63 +23,101 @@
     if (vid.duration && t > vid.duration - 30) { delete p[current.id]; p['done_' + current.id] = 1; }
     else if (t > 5) p[current.id] = Math.floor(t);
     if (currentShow) p['last_' + currentShow.id] = epIdx;
+    p['ts_' + (currentShow ? currentShow.id : current.id)] = Date.now();
     store(p);
   }
-
   function show(screen) {
-    ['lib', 'player', 'creditsScreen'].forEach(function (s) { $(s).classList.toggle('on', s === screen); });
+    ['home', 'lib', 'player', 'creditsScreen'].forEach(function (s) { $(s).classList.toggle('on', s === screen); });
+    $('focusSink').focus();
+  }
+
+  // ---------- Home (category rows) ----------
+  function buildRows() {
+    var p = positions(), cont = [];
+    LIB.forEach(function (x) {
+      if (x.show ? p['last_' + x.id] != null : p[x.id]) cont.push(x);
+    });
+    cont.sort(function (a, b) { return (p['ts_' + b.id] || 0) - (p['ts_' + a.id] || 0); });
+    rows = [];
+    if (cont.length) rows.push({ name: 'Continue Watching', items: cont });
+    CATS.forEach(function (c) { rows.push({ name: c.name, items: c.ids.map(function (i) { return BY[i]; }) }); });
+    rows.push({ name: 'All', items: LIB.slice().sort(function (a, b) { return a.title.replace(/^The /, '').localeCompare(b.title.replace(/^The /, '')); }) });
+    rows.push({ name: 'About', items: [{ id: '_credits', title: 'Credits', credits: true }] });
+    if (rowIdx >= rows.length) rowIdx = rows.length - 1;
+  }
+
+  function renderRows() {
+    var p = positions();
+    $('rows').innerHTML = rows.map(function (r, ri) {
+      return '<div class="row" data-r="' + ri + '"><h2>' + r.name + '</h2><div class="strip">' +
+        r.items.map(function (it, ci) {
+          var img = it.credits ? 'icon.png' : 'media/' + it.id + '.jpg';
+          var prog = (!it.show && !it.credits && p[it.id]) ? '<div class="prog" style="width:' + Math.min(100, 100 * p[it.id] / it.len) + '%"></div>' : '';
+          return '<div class="tile" data-c="' + ci + '"><img src="' + img + '" alt=""><div class="tag">' + it.title + '</div>' + prog + '</div>';
+        }).join('') + '</div></div>';
+    }).join('');
+  }
+
+  function updateHome() {
+    var rowEls = $('rows').children;
+    for (var i = 0; i < rowEls.length; i++) {
+      var r = rows[i], c = colIdx[r.name] || 0;
+      if (c >= r.items.length) c = colIdx[r.name] = r.items.length - 1;
+      rowEls[i].classList.toggle('cur', i === rowIdx);
+      var tiles = rowEls[i].querySelectorAll('.tile');
+      for (var j = 0; j < tiles.length; j++) tiles[j].classList.toggle('sel', j === c);
+      var maxShift = Math.max(0, r.items.length * TILE_W - 552);
+      var shift = Math.min(maxShift, Math.max(0, (c - 1) * TILE_W));
+      rowEls[i].querySelector('.strip').style.transform = 'translateX(' + (-shift) + 'px)';
+    }
+    var top = Math.min(rowIdx * ROW_H, Math.max(0, rows.length * ROW_H - 400));
+    $('rows').style.transform = 'translateY(' + (-top) + 'px)';
+    var it = rows[rowIdx].items[colIdx[rows[rowIdx].name] || 0], p = positions();
+    $('dTitle').textContent = it.title;
+    if (it.credits) { $('dMeta').textContent = 'Where these films come from'; $('dResume').textContent = ''; }
+    else if (it.show) {
+      $('dMeta').textContent = 'TV series \u00b7 ' + it.year + ' \u00b7 ' + it.eps.length + ' episodes';
+      var last = p['last_' + it.id];
+      $('dResume').textContent = last != null ? 'Continue S' + it.eps[last].s + ' E' + it.eps[last].e + ': ' + it.eps[last].title : 'Pinch to see episodes';
+    } else {
+      $('dMeta').textContent = it.year + ' \u00b7 ' + mins(it.len);
+      $('dResume').textContent = p[it.id] ? 'Resume at ' + fmt(p[it.id]) : (p['done_' + it.id] ? 'Watched' : '');
+    }
   }
 
   function renderHome() {
     mode = 'home';
-    var it = LIB[homeIdx], p = positions();
-    $('hdr').textContent = 'Glasses Cinema';
-    $('poster').src = 'media/' + it.id + '.jpg';
-    $('poster').alt = it.title;
-    $('title').textContent = it.title;
-    if (it.show) {
-      $('meta').textContent = 'TV \u00b7 ' + it.eps.length + ' episodes';
-      var last = p['last_' + it.id];
-      $('resume').textContent = last != null ? 'Continue S' + it.eps[last].s + ' E' + it.eps[last].e : '';
-    } else {
-      $('meta').textContent = it.year + ' \u00b7 ' + mins(it.len);
-      $('resume').textContent = p[it.id] ? 'Resume at ' + fmt(p[it.id]) : '';
-    }
-    $('dots').textContent = (homeIdx + 1) + ' of ' + LIB.length;
-    $('hint').textContent = 'Swipe to browse \u00b7 pinch to ' + (it.show ? 'open' : 'play') + ' \u00b7 swipe down for credits';
-    show('lib');
-    $('card').focus();
+    buildRows(); renderRows(); updateHome();
+    show('home');
   }
+  function selectedItem() { var r = rows[rowIdx]; return r.items[colIdx[r.name] || 0]; }
 
+  // ---------- Show (episode picker) ----------
   function renderShow() {
     mode = 'show';
     var ep = currentShow.eps[epIdx], p = positions();
     $('hdr').textContent = currentShow.title;
     $('poster').src = 'media/' + currentShow.id + '.jpg';
-    $('poster').alt = currentShow.title;
     $('title').textContent = ep.title;
     $('meta').textContent = 'Season ' + ep.s + ' \u00b7 Episode ' + ep.e + ' \u00b7 ' + mins(ep.len);
     $('resume').textContent = p[ep.id] ? 'Resume at ' + fmt(p[ep.id]) : (p['done_' + ep.id] ? 'Watched' : '');
     $('dots').textContent = (epIdx + 1) + ' of ' + currentShow.eps.length;
-    $('hint').textContent = 'Swipe left/right for episodes \u00b7 up/down for seasons';
     show('lib');
-    $('card').focus();
   }
-
-  function openShow(push) {
-    currentShow = LIB[homeIdx];
-    var last = positions()['last_' + currentShow.id];
+  function openShow(item) {
+    currentShow = item;
+    var last = positions()['last_' + item.id];
     epIdx = last != null ? last : 0;
-    if (push) history.pushState({ screen: 'show', homeIdx: homeIdx }, '');
+    history.pushState({ screen: 'show', id: item.id }, '');
     renderShow();
   }
-
-  function renderCredits() {
-    $('creditList').innerHTML =
-      '<p>Public domain and Creative Commons films and TV episodes (Pioneer One by Bracey Smith and Josh Bernhard, CC license via VODO), streamed from the Internet Archive (archive.org).</p>' +
-      '<p style="margin-top:12px">' + LIB.map(function (f) { return f.title + ' (' + f.year + ')'; }).join(' \u00b7 ') + '</p>';
+  function seasonJump(dir) {
+    var eps = currentShow.eps, s = eps[epIdx].s + dir;
+    for (var i = 0; i < eps.length; i++) if (eps[i].s === s) { epIdx = i; return true; }
+    return false;
   }
 
+  // ---------- Player ----------
   function toast(text) {
     var t = $('toast'); t.textContent = text; t.style.opacity = 1;
     clearTimeout(toastTimer); toastTimer = setTimeout(function () { t.style.opacity = 0; }, 800);
@@ -94,7 +135,6 @@
     $('fill').style.width = (100 * (vid.currentTime / d)) + '%';
     if (!vid.seeking && vid.readyState >= 2) $('state').textContent = vid.paused ? 'Paused' : '';
   }
-
   function play(item, push) {
     current = item;
     mode = 'player';
@@ -133,26 +173,20 @@
   });
   setInterval(function () { if (current && !vid.paused) savePos(); }, 10000);
 
-  function activate() {
-    if (mode === 'home') { var it = LIB[homeIdx]; if (it.show) openShow(true); else { currentShow = null; play(it, true); } }
-    else if (mode === 'show') play(currentShow.eps[epIdx], true);
+  function renderCredits() {
+    $('creditList').innerHTML =
+      '<p>Public domain films and TV, plus Pioneer One (Creative Commons, by Josh Bernhard and Bracey Smith). Streamed from the Internet Archive (archive.org).</p>' +
+      '<p style="margin-top:12px">' + LIB.map(function (f) { return f.title + ' (' + f.year + ')'; }).join(' \u00b7 ') + '</p>';
   }
-  $('card').addEventListener('click', activate);
-  $('closeCredits').addEventListener('click', function () { history.back(); });
 
+  // ---------- Navigation ----------
   window.addEventListener('popstate', function (e) {
     var s = e.state || { screen: 'home' };
     if (current) stopVideo();
-    if (s.screen === 'show') { homeIdx = s.homeIdx || homeIdx; currentShow = LIB[homeIdx]; renderShow(); }
+    if (s.screen === 'show') { currentShow = BY[s.id]; renderShow(); }
     else if (s.screen === 'player') { history.back(); }
     else { currentShow = null; renderHome(); }
   });
-
-  function seasonJump(dir) {
-    var eps = currentShow.eps, s = eps[epIdx].s + dir;
-    for (var i = 0; i < eps.length; i++) if (eps[i].s === s) { epIdx = i; return true; }
-    return false;
-  }
 
   document.addEventListener('keydown', function (e) {
     var k = e.key;
@@ -174,20 +208,29 @@
       var n = currentShow.eps.length;
       if (k === 'ArrowRight') epIdx = (epIdx + 1) % n;
       else if (k === 'ArrowLeft') epIdx = (epIdx - 1 + n) % n;
-      else if (k === "ArrowDown") { if (!seasonJump(1)) epIdx = 0; }
+      else if (k === 'ArrowDown') { if (!seasonJump(1)) epIdx = 0; }
       else if (k === 'ArrowUp') { if (!seasonJump(-1)) epIdx = 0; }
-      else if (k === 'Enter') { activate(); e.preventDefault(); return; }
+      else if (k === 'Enter') { play(currentShow.eps[epIdx], true); e.preventDefault(); return; }
       else if (k === 'Escape' || k === 'Backspace') { history.back(); e.preventDefault(); return; }
       else return;
       renderShow(); e.preventDefault(); return;
     }
     // home
-    if (k === 'ArrowRight') { homeIdx = (homeIdx + 1) % LIB.length; renderHome(); }
-    else if (k === 'ArrowLeft') { homeIdx = (homeIdx - 1 + LIB.length) % LIB.length; renderHome(); }
-    else if (k === 'ArrowDown') { mode = 'credits'; show('creditsScreen'); history.pushState({ screen: 'credits' }, ''); $('closeCredits').focus(); }
-    else if (k === 'Enter') { activate(); }
+    var r = rows[rowIdx], c = colIdx[r.name] || 0;
+    if (k === 'ArrowDown') rowIdx = Math.min(rows.length - 1, rowIdx + 1);
+    else if (k === 'ArrowUp') rowIdx = Math.max(0, rowIdx - 1);
+    else if (k === 'ArrowRight') colIdx[r.name] = Math.min(r.items.length - 1, c + 1);
+    else if (k === 'ArrowLeft') colIdx[r.name] = Math.max(0, c - 1);
+    else if (k === 'Enter') {
+      var it = selectedItem();
+      e.preventDefault();
+      if (it.credits) { mode = 'credits'; show('creditsScreen'); history.pushState({ screen: 'credits' }, ''); }
+      else if (it.show) openShow(it);
+      else { currentShow = null; play(it, true); }
+      return;
+    }
     else return;
-    e.preventDefault();
+    updateHome(); e.preventDefault();
   });
 
   function netState() { $('net').textContent = navigator.onLine ? '' : 'Offline'; }

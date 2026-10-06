@@ -43,7 +43,7 @@ window.LIBRARY = [
     "e": 5,
     "title": "Sea Change",
     "len": 2264,
-    "u": "https://archive.org/download/pioneer-one-ep.-5-sea-change/PIONEER%20ONE%20Ep.5%20Sea%20Change.mp4"
+    "u": "media/pioneer_e5.mp4"
    },
    {
     "id": "po1_6",
@@ -571,5 +571,58 @@ window.LIBRARY = [
   "year": 1936,
   "len": 998,
   "u": "https://archive.org/download/three-stooges-disorder-in-the-court-blu-ray-restoration/Three_Stooges_Disorder_In_The_Court_(Blu-ray_restoration).mp4"
+ }
+];
+window.CATEGORIES = [
+ {
+  "name": "TV Shows",
+  "ids": [
+   "pioneer",
+   "bevhill"
+  ]
+ },
+ {
+  "name": "Horror",
+  "ids": [
+   "notld",
+   "hauntedhill",
+   "lastman",
+   "dementia13",
+   "terror",
+   "littleshop"
+  ]
+ },
+ {
+  "name": "Sci-Fi",
+  "ids": [
+   "pioneer",
+   "lastman",
+   "teenagers"
+  ]
+ },
+ {
+  "name": "Comedy",
+  "ids": [
+   "hisgirl",
+   "stooges",
+   "bevhill",
+   "littleshop"
+  ]
+ },
+ {
+  "name": "Crime & Noir",
+  "ids": [
+   "hitchhiker",
+   "dementia13"
+  ]
+ },
+ {
+  "name": "Cult Classics",
+  "ids": [
+   "reefer",
+   "teenagers",
+   "littleshop",
+   "notld"
+  ]
  }
 ];
