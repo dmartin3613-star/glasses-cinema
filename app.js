@@ -73,7 +73,7 @@
 
   function renderCredits() {
     $('creditList').innerHTML =
-      '<p>Public domain films and TV episodes, streamed from the Internet Archive (archive.org).</p>' +
+      '<p>Public domain and Creative Commons films and TV episodes (Pioneer One by Bracey Smith and Josh Bernhard, CC license via VODO), streamed from the Internet Archive (archive.org).</p>' +
       '<p style="margin-top:12px">' + LIB.map(function (f) { return f.title + ' (' + f.year + ')'; }).join(' \u00b7 ') + '</p>';
   }
 

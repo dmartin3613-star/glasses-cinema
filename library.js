@@ -1,5 +1,68 @@
 window.LIBRARY = [
  {
+  "id": "pioneer",
+  "title": "Pioneer One",
+  "year": 2010,
+  "show": true,
+  "eps": [
+   {
+    "id": "po1_1",
+    "s": 1,
+    "e": 1,
+    "title": "Earthfall",
+    "len": 1896,
+    "u": "https://archive.org/download/pioneer-one-ep.-1-earthfall-pilot/PIONEER%20ONE%20Ep.1%20Earthfall-Pilot.ia.mp4"
+   },
+   {
+    "id": "po1_2",
+    "s": 1,
+    "e": 2,
+    "title": "The Man from Mars",
+    "len": 2322,
+    "u": "https://archive.org/download/pioneer-one-ep.-2-the-man-from-mars_202608/PIONEER%20ONE%20Ep.2%20The%20Man%20From%20Mars.ia.mp4"
+   },
+   {
+    "id": "po1_3",
+    "s": 1,
+    "e": 3,
+    "title": "Alone in the Night",
+    "len": 1875,
+    "u": "https://archive.org/download/pioneer-one-ep.-3-alone-in-the-night/PIONEER%20ONE%20Ep.3%20Alone%20in%20the%20Night.ia.mp4"
+   },
+   {
+    "id": "po1_4",
+    "s": 1,
+    "e": 4,
+    "title": "Triangular Diploma",
+    "len": 2027,
+    "u": "https://archive.org/download/pioneer-one-ep.-4-triangular-diploma/PIONEER%20ONE%20Ep.4%20Triangular%20Diploma.ia.mp4"
+   },
+   {
+    "id": "po1_5",
+    "s": 1,
+    "e": 5,
+    "title": "Sea Change",
+    "len": 2264,
+    "u": "https://archive.org/download/pioneer-one-ep.-5-sea-change/PIONEER%20ONE%20Ep.5%20Sea%20Change.mp4"
+   },
+   {
+    "id": "po1_6",
+    "s": 1,
+    "e": 6,
+    "title": "War of the World",
+    "len": 2640,
+    "u": "https://archive.org/download/pioneer-one-ep.-6-war-of-the-world-3mp-4_202608/PIONEER%20ONE%20Ep.6%20War%20of%20the%20World3mp4.ia.mp4"
+   }
+  ]
+ },
+ {
+  "id": "lastman",
+  "title": "The Last Man on Earth",
+  "year": 1964,
+  "len": 5204,
+  "u": "https://archive.org/download/TheLastManOnEarth1964_201808/The%20Last%20Man%20on%20Earth%20(1964).mp4"
+ },
+ {
   "id": "notld",
   "title": "Night of the Living Dead",
   "year": 1968,
@@ -466,6 +529,13 @@ window.LIBRARY = [
   "year": 1963,
   "len": 4496,
   "u": "https://archive.org/download/dementia-13-1963_202312/Dementia%2013%20(1963).mp4"
+ },
+ {
+  "id": "terror",
+  "title": "The Terror",
+  "year": 1963,
+  "len": 4743,
+  "u": "https://archive.org/download/TheTerror/TheTerror.mp4"
  },
  {
   "id": "reefer",
