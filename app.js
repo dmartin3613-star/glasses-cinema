@@ -12,7 +12,7 @@
     { id: 'classic_cartoons', title: 'Cartoons' }
   ];
   var SCOPE = '(' + COLLECTIONS.map(function (c) { return 'collection:' + c.id; }).join(' OR ') + ')';
-  var DECADES = [1920, 1930, 1940, 1950, 1960, 1970, 1980, 1990, 2000, 2010];
+  var DECADES = [1920, 1930, 1940, 1950, 1960, 1970];
   // genre words -> [archive query, wikimedia genre code]
   var GENRE_WORDS = {
     horror: ['(subject:horror OR collection:SciFi_Horror)', 'H'], scary: ['(subject:horror OR collection:SciFi_Horror)', 'H'],
