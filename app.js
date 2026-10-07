@@ -30,9 +30,9 @@
   function positions() { return load(KEY, {}); }
   function store(p) { try { localStorage.setItem(KEY, JSON.stringify(p)); } catch (e) {} }
   function getJSON(url, tries) {
-    tries = tries || 3;
+    tries = tries || 4;
     return fetch(url).then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
-      .catch(function (e) { if (tries <= 1) throw e; return new Promise(function (res) { setTimeout(res, 1500); }).then(function () { return getJSON(url, tries - 1); }); });
+      .catch(function (e) { if (tries <= 1) throw e; return new Promise(function (res) { setTimeout(res, 2500); }).then(function () { return getJSON(url, tries - 1); }); });
   }
   function short(t, n) { t = String(t || ''); n = n || 58; return t.length > n ? t.slice(0, n - 1).replace(/\s+\S*$/, '') + '\u2026' : t; }
   function thumb(id) { return IA + '/services/img/' + encodeURIComponent(id); }
@@ -78,7 +78,7 @@
       return '<div class="row" data-r="' + ri + '"><h2>' + esc(r.name) + '</h2><div class="strip">' +
         r.items.map(function (it, ci) {
           var prog = (it.len && !it.show && p[it.id]) ? '<div class="prog" style="width:' + Math.min(100, 100 * p[it.id] / it.len) + '%"></div>' : '';
-          return '<div class="tile" data-c="' + ci + '"><img src="' + esc(imgFor(it)) + '" alt=""><div class="tag">' + esc(it.title) + '</div>' + prog + '</div>';
+          return '<div class="tile" data-c="' + ci + '"><img src="' + esc(imgFor(it)) + '" alt="" onerror="this.onerror=null;this.src=\'icon.png\'"><div class="tag">' + esc(it.title) + '</div>' + prog + '</div>';
         }).join('') + '</div></div>';
     }).join('');
   }
@@ -141,7 +141,7 @@
       b.loading = false; b.page++; b.total = res.numFound;
       res.docs.forEach(function (d) { b.items.push({ id: d.identifier, title: d.title || d.identifier, year: d.year, archive: true, img: thumb(d.identifier) }); });
       if (mode === 'browse' && browse === b) renderBrowse();
-    }).catch(function () { b.loading = false; if (mode === 'browse') { $('title').textContent = 'The Archive is not responding'; $('meta').textContent = 'Swipe back and try again'; } });
+    }).catch(function () { b.loading = false; if (mode === 'browse') { $('title').textContent = 'The Archive is busy right now'; $('meta').textContent = 'Swipe back and try again in a minute'; } });
   }
   function renderBrowse() {
     show('lib');
