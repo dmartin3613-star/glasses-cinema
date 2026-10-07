@@ -181,7 +181,7 @@
       return s;
     }
     var out = order.map(function (k) { return groups[k].sort(function (a, b) { return score(b) - score(a); })[0]; });
-    out.sort(function (a, b) { return a.name.localeCompare(b.name, undefined, { numeric: true }); });
+    out.sort(function (a, b) { return a.name.replace(/^.*\//, '').localeCompare(b.name.replace(/^.*\//, ''), undefined, { numeric: true }); });
     return out;
   }
   function prettyName(n) {
