@@ -11,6 +11,14 @@
     { id: 'silent_films', title: 'Silent Films' },
     { id: 'classic_cartoons', title: 'Cartoons' }
   ];
+  var WM = 'https://upload.wikimedia.org/wikipedia/commons/';
+  var WM_GENRES = [
+    ['', 'Most Popular'], ['H', 'Horror'], ['S', 'Sci-Fi'], ['C', 'Comedy'], ['N', 'Noir & Crime'], ['W', 'Westerns'],
+    ['R', 'War'], ['M', 'Musicals'], ['A', 'Adventure'], ['F', 'Fantasy'], ['Y', 'Romance'], ['D', 'Drama'],
+    ['L', 'Silent Films'], ['O', 'Documentaries'], ['K', 'Family']
+  ];
+  var GNAME = { H: 'Horror', S: 'Sci-Fi', C: 'Comedy', N: 'Crime', W: 'Western', R: 'War', M: 'Musical', A: 'Adventure', F: 'Fantasy', Y: 'Romance', D: 'Drama', L: 'Silent', O: 'Documentary', K: 'Family' };
+  var wmCat = null, wmById = {}, searchTarget = 'ia';
   var $ = function (id) { return document.getElementById(id); };
   var vid = $('vid');
   var mode = 'home';            // home | browse | show | player | credits | search
@@ -35,6 +43,36 @@
       .catch(function (e) { if (tries <= 1) throw e; return new Promise(function (res) { setTimeout(res, 2500); }).then(function () { return getJSON(url, tries - 1); }); });
   }
   function short(t, n) { t = String(t || ''); n = n || 58; return t.length > n ? t.slice(0, n - 1).replace(/\s+\S*$/, '') + '\u2026' : t; }
+  function loadWM() {
+    if (wmCat) return Promise.resolve(wmCat);
+    return getJSON('commons.json').then(function (a) {
+      wmCat = a.map(function (r, i) {
+        var base = r[4].split('/').pop();
+        var it = { id: 'wm:' + r[6], title: r[0], year: r[1], len: r[2] * 60, g: r[3], o: r[4], f: r[5], wm: true, rank: i,
+          img: WM + 'thumb/' + r[4] + '/330px--' + base + '.jpg' };
+        wmById[it.id] = it;
+        return it;
+      });
+      return wmCat;
+    });
+  }
+  function wmSrc(it) {
+    var base = it.o.split('/').pop(), t = WM + 'transcoded/' + it.o + '/' + base + '.';
+    var v = document.createElement('video');
+    if (v.canPlayType('video/webm; codecs="vp9, opus"')) {
+      if (it.f.indexOf('a') >= 0) return t + '480p.vp9.webm';
+      if (it.f.indexOf('b') >= 0) return t + '360p.vp9.webm';
+      if (it.f.indexOf('c') >= 0) return t + '240p.vp9.webm';
+    }
+    if (it.f.indexOf('m') >= 0 && v.canPlayType('video/quicktime')) return t + '360p.mpeg4.mov';
+    return WM + it.o;
+  }
+  function wmGenre(code) { return wmCat.filter(function (x) { return !code || x.g.indexOf(code) >= 0; }); }
+  function playWM(it, push) {
+    rememberArchive({ id: it.id, title: it.title, wm: true });
+    currentShow = null;
+    play({ id: it.id, title: it.title, len: it.len, u: wmSrc(it) }, push);
+  }
   function thumb(id) { return IA + '/services/img/' + encodeURIComponent(id); }
   function imgFor(it) { return it.img || (it.credits ? 'icon.png' : 'media/' + it.id + '.jpg'); }
 
@@ -49,7 +87,7 @@
   }
   function rememberArchive(item) {
     var r = load(RECENT, []).filter(function (x) { return x.id !== item.id; });
-    r.unshift({ id: item.id, title: item.title });
+    r.unshift({ id: item.id, title: item.title, wm: !!item.wm });
     try { localStorage.setItem(RECENT, JSON.stringify(r.slice(0, 12))); } catch (e) {}
   }
   function show(screen) {
@@ -61,13 +99,18 @@
   function buildRows() {
     var p = positions(), cont = [];
     LIB.forEach(function (x) { if (x.show ? p['last_' + x.id] != null : p[x.id]) cont.push(x); });
-    load(RECENT, []).forEach(function (x) { cont.push({ id: x.id, title: x.title, archive: true, img: thumb(x.id) }); });
+    load(RECENT, []).forEach(function (x) {
+      if (x.wm) { var w = wmById[x.id]; if (w) cont.push(w); }
+      else cont.push({ id: x.id, title: x.title, archive: true, img: thumb(x.id) });
+    });
     cont.sort(function (a, b) { return (p['ts_' + b.id] || 0) - (p['ts_' + a.id] || 0); });
     rows = [];
     if (cont.length) rows.push({ name: 'Continue Watching', items: cont });
     CATS.forEach(function (c) { rows.push({ name: c.name, items: c.ids.map(function (i) { return BY[i]; }) }); });
-    rows.push({ name: 'Internet Archive', items: [{ id: '_search', title: 'Search the Archive', search: true, img: 'icon.png' }].concat(
+    rows.push({ name: 'Internet Archive', items: [{ id: '_search', title: 'Search the Archive', search: 'ia', img: 'icon.png' }].concat(
       COLLECTIONS.map(function (c) { return { id: c.id, title: c.title, collection: true, img: thumb(c.id) }; })) });
+    if (wmCat) rows.push({ name: 'Wikimedia Commons', items: [{ id: '_wmsearch', title: 'Search Wikimedia', search: 'wm', img: 'icon.png' }].concat(
+      WM_GENRES.map(function (g) { var l = wmGenre(g[0]); return { id: '_wm' + g[0], title: g[1], wmGenre: g[0], img: l[0] && l[0].img, count: l.length }; })) });
     rows.push({ name: 'All', items: LIB.slice().sort(function (a, b) { return a.title.replace(/^The /, '').localeCompare(b.title.replace(/^The /, '')); }) });
     rows.push({ name: 'About', items: [{ id: '_credits', title: 'Credits', credits: true }] });
     if (rowIdx >= rows.length) rowIdx = rows.length - 1;
@@ -99,7 +142,9 @@
     var it = selectedItem(), p = positions();
     $('dTitle').textContent = it.title;
     if (it.credits) { $('dMeta').textContent = 'Where these films come from'; $('dResume').textContent = ''; }
-    else if (it.search) { $('dMeta').textContent = 'Find any film or show by voice'; $('dResume').textContent = 'Pinch to search'; }
+    else if (it.search) { $('dMeta').textContent = it.search === 'wm' ? 'Find any of ' + wmCat.length + ' free films' : 'Find any film or show by voice'; $('dResume').textContent = 'Pinch to search'; }
+    else if (it.wmGenre != null) { $('dMeta').textContent = 'Wikimedia Commons \u00b7 ' + it.count + ' films'; $('dResume').textContent = 'Pinch to browse'; }
+    else if (it.wm) { $('dMeta').textContent = [it.year, mins(it.len)].filter(Boolean).join(' \u00b7 '); var pw = positions()[it.id]; $('dResume').textContent = pw ? 'Resume at ' + fmt(pw) : ''; }
     else if (it.collection) { $('dMeta').textContent = 'Internet Archive collection'; $('dResume').textContent = 'Pinch to browse'; }
     else if (it.archive) { $('dMeta').textContent = 'From the Internet Archive'; $('dResume').textContent = 'Pinch to continue'; }
     else if (it.show) {
@@ -134,8 +179,14 @@
     renderBrowse();
     moreResults();
   }
+  function startLocalBrowse(title, items, push) {
+    browse = { title: title, items: items, page: 1, total: items.length, idx: 0, loading: false, local: true };
+    if (push) history.pushState({ screen: 'browse' }, '');
+    mode = 'browse';
+    renderBrowse();
+  }
   function moreResults() {
-    if (!browse || browse.loading || (browse.total != null && browse.items.length >= browse.total)) return;
+    if (!browse || browse.local || browse.loading || (browse.total != null && browse.items.length >= browse.total)) return;
     browse.loading = true; var b = browse;
     iaQuery(b.q, b.page + 1).then(function (res) {
       b.loading = false; b.page++; b.total = res.numFound;
@@ -157,8 +208,14 @@
     var it = browse.items[browse.idx];
     $('poster').src = it.img;
     $('title').textContent = short(it.title);
-    $('meta').textContent = it.year ? String(it.year) : 'Internet Archive';
-    $('resume').textContent = '';
+    if (it.wm) {
+      $('meta').textContent = [it.year, mins(it.len), it.g.split('').filter(function (c) { return c !== 'D' && c !== 'L'; }).slice(0, 2).map(function (c) { return GNAME[c]; }).join(', ')].filter(Boolean).join(' \u00b7 ');
+      var pp = positions()[it.id];
+      $('resume').textContent = pp ? 'Resume at ' + fmt(pp) : '';
+    } else {
+      $('meta').textContent = it.year ? String(it.year) : 'Internet Archive';
+      $('resume').textContent = '';
+    }
     $('dots').textContent = (browse.idx + 1) + ' of ' + (browse.total || browse.items.length);
     if (browse.idx > browse.items.length - 6) moreResults();
   }
@@ -213,7 +270,9 @@
     }).catch(function (err) { $('meta').textContent = 'Could not load this item'; console.error(err); window._iaErr = String(err && err.stack || err); });
   }
 
-  function openSearch() {
+  function openSearch(target) {
+    searchTarget = target || 'ia';
+    $('searchLabel').textContent = searchTarget === 'wm' ? 'Search Wikimedia Commons' : 'Search the Internet Archive';
     mode = 'search';
     history.pushState({ screen: 'search' }, '');
     show('searchScreen');
@@ -222,6 +281,14 @@
   function runSearch() {
     var v = $('q').value.trim();
     if (!v) return;
+    if (searchTarget === 'wm') {
+      var norm = function (x) { return x.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9 ]/g, ' '); };
+      var words = norm(v).split(/\s+/).filter(Boolean);
+      var res = wmCat.filter(function (x) { var t = norm(x.title + ' ' + (x.year || '')); return words.every(function (w) { return t.indexOf(w) >= 0; }); });
+      history.replaceState({ screen: 'browse' }, '');
+      startLocalBrowse('Search: ' + v, res, false);
+      return;
+    }
     var t = v.replace(/[()"]/g, ' ').trim();
     var q = 'title:(' + t + ') AND mediatype:movies';
     history.replaceState({ screen: 'browse' }, '');
@@ -317,7 +384,7 @@
 
   function renderCredits() {
     $('creditList').innerHTML =
-      '<p>Public domain films and TV, plus Pioneer One (Creative Commons, by Josh Bernhard and Bracey Smith). Streamed from the Internet Archive (archive.org).</p>' +
+      '<p>Public domain films and TV, plus Pioneer One (Creative Commons, by Josh Bernhard and Bracey Smith). Streamed from the Internet Archive (archive.org). Wikimedia Commons films are public domain or freely licensed, listed via Wikidata.</p>' +
       '<p style="margin-top:12px">' + LIB.map(function (f) { return esc(f.title) + ' (' + f.year + ')'; }).join(' \u00b7 ') + '</p>';
   }
 
@@ -359,7 +426,7 @@
       else if (k === 'ArrowLeft' && n) browse.idx = Math.max(0, browse.idx - 1);
       else if (k === 'ArrowDown' && n) browse.idx = Math.min(n - 1, browse.idx + 10);
       else if (k === 'ArrowUp' && n) browse.idx = Math.max(0, browse.idx - 10);
-      else if (k === 'Enter' && n) { e.preventDefault(); openArchiveItem(browse.items[browse.idx], true); return; }
+      else if (k === 'Enter' && n) { e.preventDefault(); var bi = browse.items[browse.idx]; if (bi.wm) playWM(bi, true); else openArchiveItem(bi, true); return; }
       else if (k === 'Escape' || k === 'Backspace') { e.preventDefault(); history.back(); return; }
       else return;
       renderBrowse(); e.preventDefault(); return;
@@ -386,7 +453,9 @@
       var it = selectedItem();
       e.preventDefault();
       if (it.credits) { mode = 'credits'; show('creditsScreen'); history.pushState({ screen: 'credits' }, ''); }
-      else if (it.search) openSearch();
+      else if (it.search) openSearch(it.search);
+      else if (it.wmGenre != null) startLocalBrowse(it.title, wmGenre(it.wmGenre), true);
+      else if (it.wm) playWM(it, true);
       else if (it.collection) startBrowse(it.title, 'collection:' + it.id + ' AND mediatype:movies', true);
       else if (it.archive) { currentShow = null; openArchiveItem(it, true); }
       else if (it.show) openShow(it);
@@ -404,6 +473,7 @@
   history.replaceState({ screen: 'home' }, '');
   renderCredits();
   renderHome();
+  loadWM().then(function () { if (mode === 'home') renderHome(); }).catch(function () {});
   netState();
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(function () {});
 })();
