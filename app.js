@@ -204,7 +204,7 @@
       var last = positions()['last_' + it.id];
       epIdx = last != null && last < currentShow.eps.length ? last : 0;
       if (mode === 'show') renderShow();
-    }).catch(function () { $('meta').textContent = 'Could not load this item'; });
+    }).catch(function (err) { $('meta').textContent = 'Could not load this item'; console.error(err); window._iaErr = String(err && err.stack || err); });
   }
 
   function openSearch() {
@@ -216,7 +216,8 @@
   function runSearch() {
     var v = $('q').value.trim();
     if (!v) return;
-    var q = '(' + v.replace(/[()"]/g, ' ') + ') AND mediatype:movies';
+    var t = v.replace(/[()"]/g, ' ').trim();
+    var q = 'title:(' + t + ') AND mediatype:movies';
     history.replaceState({ screen: 'browse' }, '');
     startBrowse('Search: ' + v, q, false);
   }
