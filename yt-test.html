@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=600, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>YouTube Test</title>
+<link rel="icon" type="image/png" sizes="192x192" href="icon.png">
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{width:600px;height:600px;overflow:hidden;background:#000;color:#f2f2f2;font-family:system-ui,sans-serif}
+  #hdr{position:absolute;top:18px;left:0;right:0;text-align:center;font-size:18px;letter-spacing:.12em;text-transform:uppercase;color:#7fe6ff}
+  #wrap{position:absolute;left:0;top:110px;width:600px;height:338px;pointer-events:none}
+  #wrap iframe{width:600px;height:338px;border:0}
+  #title{position:absolute;top:52px;left:20px;right:20px;text-align:center;font-size:21px;line-height:1.2}
+  #status{position:absolute;bottom:64px;left:0;right:0;text-align:center;font-size:18px;color:#ffd166}
+  #hint{position:absolute;bottom:22px;left:0;right:0;text-align:center;font-size:16px;color:#9a9a9a}
+  #sink{position:absolute;width:1px;height:1px;opacity:0}
+</style>
+</head>
+<body>
+<div id="hdr">YouTube Test &middot; FilmRise</div>
+<div id="title"></div>
+<div id="wrap"><div id="yt"></div></div>
+<div id="status">Loading YouTube player&hellip;</div>
+<div id="hint">Pinch play/pause &middot; left/right change episode &middot; up/down skip 30s</div>
+<div id="sink" tabindex="0"></div>
+<script>
+  var EPS = [
+    ['VRUsUbUt9sw', 'Forensic Files S12 E12: Screen Pass'],
+    ['B1WzOOrD6mg', 'Forensic Files S10 E24: Unholy Alliance'],
+    ['dbqo1zc2qqw', 'Forensic Files S8 E35: Grounds for Indictment'],
+    ['g2Kc_2V0MzU', "Forensic Files S7 E12: Scout's Honor"],
+    ['G8fs4qWGlJk', 'Forensic Files S4 E11: Haunting Vision']
+  ];
+  var i = 0, player = null, ready = false;
+  var STATES = { '-1': 'Ready, pinch to play', 0: 'Ended', 1: 'Playing', 2: 'Paused', 3: 'Buffering\u2026', 5: 'Ready, pinch to play' };
+  var ERRS = { 2: 'Bad video id', 5: 'HTML5 player error', 100: 'Video removed or private', 101: 'Embedding blocked by owner', 150: 'Embedding blocked by owner', 153: 'Missing referrer, embedding refused' };
+  function $(id) { return document.getElementById(id); }
+  function status(t) { $('status').textContent = t; }
+  function show() { $('title').textContent = (i + 1) + ' of ' + EPS.length + ' \u00b7 ' + EPS[i][1]; }
+  show();
+  document.getElementById('sink').focus();
+
+  window.onYouTubeIframeAPIReady = function () {
+    player = new YT.Player('yt', {
+      width: 600, height: 338, videoId: EPS[i][0],
+      playerVars: { playsinline: 1, controls: 0, rel: 0, modestbranding: 1, origin: location.origin },
+      events: {
+        onReady: function () { ready = true; status('Ready, pinch to play'); var f = document.querySelector('#wrap iframe'); if (f) f.setAttribute('tabindex', '-1'); $('sink').focus(); },
+        onStateChange: function (e) { status(STATES[e.data] || ('State ' + e.data)); },
+        onError: function (e) { status('Error ' + e.data + ': ' + (ERRS[e.data] || 'unknown')); }
+      }
+    });
+  };
+  setTimeout(function () { if (!ready) status('YouTube player did not load (blocked or unsupported)'); }, 15000);
+
+  document.addEventListener('keydown', function (e) {
+    var k = e.key;
+    if (k === 'Escape' || k === 'Backspace') { history.back(); e.preventDefault(); return; }
+    if (!ready) return;
+    if (k === 'Enter' || k === ' ') {
+      var s = player.getPlayerState();
+      if (s === 1 || s === 3) player.pauseVideo(); else player.playVideo();
+    } else if (k === 'ArrowRight' || k === 'ArrowLeft') {
+      i = (i + (k === 'ArrowRight' ? 1 : EPS.length - 1)) % EPS.length;
+      show(); player.cueVideoById(EPS[i][0]);
+    } else if (k === 'ArrowUp') { player.seekTo(player.getCurrentTime() + 30, true); status('+30s'); }
+    else if (k === 'ArrowDown') { player.seekTo(Math.max(0, player.getCurrentTime() - 30), true); status('\u221230s'); }
+    else return;
+    e.preventDefault();
+    $('sink').focus();
+  });
+  window.addEventListener('blur', function () { setTimeout(function () { window.focus(); $('sink').focus(); }, 0); });
+</script>
+<script src="https://www.youtube.com/iframe_api"></script>
+</body>
+</html>
