@@ -11,6 +11,41 @@
     { id: 'silent_films', title: 'Silent Films' },
     { id: 'classic_cartoons', title: 'Cartoons' }
   ];
+  var SCOPE = '(' + COLLECTIONS.map(function (c) { return 'collection:' + c.id; }).join(' OR ') + ')';
+  var DECADES = [1920, 1930, 1940, 1950, 1960, 1970, 1980, 1990, 2000, 2010];
+  // genre words -> [archive query, wikimedia genre code]
+  var GENRE_WORDS = {
+    horror: ['(subject:horror OR collection:SciFi_Horror)', 'H'], scary: ['(subject:horror OR collection:SciFi_Horror)', 'H'],
+    zombie: ['subject:zombie', 'H'], monster: ['subject:monster', 'H'],
+    scifi: ['(subject:"science fiction" OR collection:SciFi_Horror)', 'S'], 'sci fi': ['(subject:"science fiction" OR collection:SciFi_Horror)', 'S'], 'science fiction': ['(subject:"science fiction" OR collection:SciFi_Horror)', 'S'],
+    comedy: ['(subject:comedy OR collection:Comedy_Films)', 'C'], comedies: ['(subject:comedy OR collection:Comedy_Films)', 'C'], funny: ['(subject:comedy OR collection:Comedy_Films)', 'C'],
+    noir: ['(subject:noir OR collection:Film_Noir)', 'N'], crime: ['(subject:crime OR collection:Film_Noir)', 'N'], mystery: ['subject:mystery', 'N'], thriller: ['subject:thriller', 'N'],
+    western: ['subject:western', 'W'], westerns: ['subject:western', 'W'], cowboy: ['subject:western', 'W'],
+    war: ['subject:war', 'R'], musical: ['subject:musical', 'M'], musicals: ['subject:musical', 'M'],
+    action: ['subject:action', 'A'], adventure: ['subject:adventure', 'A'], fantasy: ['subject:fantasy', 'F'],
+    romance: ['subject:romance', 'Y'], drama: ['subject:drama', 'D'], documentary: ['subject:documentary', 'O'], documentaries: ['subject:documentary', 'O'],
+    silent: ['collection:silent_films', 'L'], cartoon: ['collection:classic_cartoons', 'K'], cartoons: ['collection:classic_cartoons', 'K'], animated: ['collection:classic_cartoons', 'K'], kids: ['collection:classic_cartoons', 'K'], family: ['collection:classic_cartoons', 'K']
+  };
+  var WORD_DECADES = { twenties: 1920, thirties: 1930, forties: 1940, fifties: 1950, sixties: 1960, seventies: 1970, eighties: 1980, nineties: 1990 };
+  // Pull decade, year and genre out of free text: "90s horror", "1950s sci fi", "1968", "nineties comedy"
+  function parseQuery(v) {
+    var t = ' ' + v.toLowerCase().replace(/[’']/g, '').replace(/[-_]/g, ' ').replace(/[()"]/g, ' ') + ' ';
+    var out = { from: null, to: null, genres: [], text: '' };
+    t = t.replace(/\b(?:the\s+)?(?:(1[89]|20)?(\d)0s)\b/g, function (m, c, d) {
+      var cent = c ? +c * 100 : (+d >= 2 ? 1900 : 2000); out.from = cent + d * 10; out.to = out.from + 9; return ' '; });
+    if (out.from == null) t = t.replace(/\b(twenties|thirties|forties|fifties|sixties|seventies|eighties|nineties)\b/g, function (m) { out.from = WORD_DECADES[m]; out.to = out.from + 9; return ' '; });
+    if (out.from == null) t = t.replace(/\b(18[89]\d|19\d\d|20[0-2]\d)\b/g, function (m) { out.from = out.to = +m; return ' '; });
+    Object.keys(GENRE_WORDS).sort(function (a, b) { return b.length - a.length; }).forEach(function (g) {
+      var re = new RegExp('\\b' + g + '\\b', 'g');
+      if (re.test(t)) { out.genres.push(GENRE_WORDS[g]); t = t.replace(re, ' '); }
+    });
+    t = t.replace(/\b(movies?|films?|shows?|from|in|the|of|era|old|classic|best|good|me|some|find|search|for)\b/g, ' ');
+    out.text = t.replace(/\s+/g, ' ').trim();
+    // A plain title like "War of the Worlds" stays a title search
+    if (out.text && out.genres.length && out.from == null) { out.genres = []; out.text = v.replace(/[()"]/g, ' ').replace(/\s+/g, ' ').trim(); }
+    return out;
+  }
+  function decadeLabel(p) { return p.from == null ? '' : (p.from === p.to ? String(p.from) : p.from + 's'); }
   var WM = 'https://upload.wikimedia.org/wikipedia/commons/';
   var WM_GENRES = [
     ['', 'Most Popular'], ['H', 'Horror'], ['S', 'Sci-Fi'], ['C', 'Comedy'], ['N', 'Noir & Crime'], ['W', 'Westerns'],
@@ -109,6 +144,7 @@
     CATS.forEach(function (c) { rows.push({ name: c.name, items: c.ids.map(function (i) { return BY[i]; }) }); });
     rows.push({ name: 'Internet Archive', items: [{ id: '_search', title: 'Search the Archive', search: 'ia', img: 'icon.png' }].concat(
       COLLECTIONS.map(function (c) { return { id: c.id, title: c.title, collection: true, img: thumb(c.id) }; })) });
+    rows.push({ name: 'Archive by Decade', items: DECADES.map(function (d) { return { id: '_dec' + d, title: d + 's', decade: d, img: 'icon.png' }; }) });
     if (wmCat) rows.push({ name: 'Wikimedia Commons', items: [{ id: '_wmsearch', title: 'Search Wikimedia', search: 'wm', img: 'icon.png' }].concat(
       WM_GENRES.map(function (g) { var l = wmGenre(g[0]); return { id: '_wm' + g[0], title: g[1], wmGenre: g[0], img: l[0] && l[0].img, count: l.length }; })) });
     rows.push({ name: 'All', items: LIB.slice().sort(function (a, b) { return a.title.replace(/^The /, '').localeCompare(b.title.replace(/^The /, '')); }) });
@@ -145,6 +181,7 @@
     else if (it.search) { $('dMeta').textContent = it.search === 'wm' ? 'Find any of ' + wmCat.length + ' free films' : 'Find any film or show by voice'; $('dResume').textContent = 'Pinch to search'; }
     else if (it.wmGenre != null) { $('dMeta').textContent = 'Wikimedia Commons \u00b7 ' + it.count + ' films'; $('dResume').textContent = 'Pinch to browse'; }
     else if (it.wm) { $('dMeta').textContent = [it.year, mins(it.len)].filter(Boolean).join(' \u00b7 '); var pw = positions()[it.id]; $('dResume').textContent = pw ? 'Resume at ' + fmt(pw) : ''; }
+    else if (it.decade) { $('dMeta').textContent = 'Archive films from the ' + it.title; $('dResume').textContent = 'Pinch to browse \u00b7 or search \u201c' + String(it.decade).slice(2) + 's horror\u201d'; }
     else if (it.collection) { $('dMeta').textContent = 'Internet Archive collection'; $('dResume').textContent = 'Pinch to browse'; }
     else if (it.archive) { $('dMeta').textContent = 'From the Internet Archive'; $('dResume').textContent = 'Pinch to continue'; }
     else if (it.show) {
@@ -283,14 +320,27 @@
     if (!v) return;
     if (searchTarget === 'wm') {
       var norm = function (x) { return x.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9 ]/g, ' '); };
-      var words = norm(v).split(/\s+/).filter(Boolean);
-      var res = wmCat.filter(function (x) { var t = norm(x.title + ' ' + (x.year || '')); return words.every(function (w) { return t.indexOf(w) >= 0; }); });
+      var p = parseQuery(v);
+      var words = norm(p.text).split(/\s+/).filter(Boolean);
+      var res = wmCat.filter(function (x) {
+        if (p.from != null && !(x.year >= p.from && x.year <= p.to)) return false;
+        if (p.genres.length && !p.genres.some(function (g) { return x.g.indexOf(g[1]) >= 0; })) return false;
+        var t = norm(x.title); return words.every(function (w) { return t.indexOf(w) >= 0; });
+      });
+      if (!res.length && (p.from != null || p.genres.length)) {
+        var tw = norm(v).split(/\s+/).filter(Boolean);
+        res = wmCat.filter(function (x) { var t = norm(x.title + ' ' + (x.year || '')); return tw.every(function (w) { return t.indexOf(w) >= 0; }); });
+      }
       history.replaceState({ screen: 'browse' }, '');
       startLocalBrowse('Search: ' + v, res, false);
       return;
     }
-    var t = v.replace(/[()"]/g, ' ').trim();
-    var q = 'title:(' + t + ') AND mediatype:movies';
+    var p = parseQuery(v), parts = ['mediatype:movies'];
+    if (p.text) parts.push('title:(' + p.text + ')');
+    if (p.from != null) parts.push('year:[' + p.from + ' TO ' + p.to + ']');
+    if (p.genres.length) parts.push('(' + p.genres.map(function (g) { return g[0]; }).join(' OR ') + ')');
+    if (!p.text) parts.push(SCOPE);
+    var q = parts.join(' AND ');
     history.replaceState({ screen: 'browse' }, '');
     startBrowse('Search: ' + v, q, false);
   }
@@ -456,6 +506,7 @@
       else if (it.search) openSearch(it.search);
       else if (it.wmGenre != null) startLocalBrowse(it.title, wmGenre(it.wmGenre), true);
       else if (it.wm) playWM(it, true);
+      else if (it.decade) startBrowse('The ' + it.title, 'mediatype:movies AND year:[' + it.decade + ' TO ' + (it.decade + 9) + '] AND ' + SCOPE, true);
       else if (it.collection) startBrowse(it.title, 'collection:' + it.id + ' AND mediatype:movies', true);
       else if (it.archive) { currentShow = null; openArchiveItem(it, true); }
       else if (it.show) openShow(it);
