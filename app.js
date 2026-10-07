@@ -139,13 +139,13 @@
       else cont.push({ id: x.id, title: x.title, archive: true, img: thumb(x.id) });
     });
     cont.sort(function (a, b) { return (p['ts_' + b.id] || 0) - (p['ts_' + a.id] || 0); });
-    rows = [];
+    rows = [{ name: 'Search', items: [{ id: '_all', title: 'Search Everything', search: 'all', img: 'icon.png' }] }];
     if (cont.length) rows.push({ name: 'Continue Watching', items: cont });
     CATS.forEach(function (c) { rows.push({ name: c.name, items: c.ids.map(function (i) { return BY[i]; }) }); });
-    rows.push({ name: 'Internet Archive', items: [{ id: '_search', title: 'Search the Archive', search: 'ia', img: 'icon.png' }].concat(
+    rows.push({ name: 'Internet Archive', items: (
       COLLECTIONS.map(function (c) { return { id: c.id, title: c.title, collection: true, img: thumb(c.id) }; })) });
     rows.push({ name: 'Archive by Decade', items: DECADES.map(function (d) { return { id: '_dec' + d, title: d + 's', decade: d, img: 'icon.png' }; }) });
-    if (wmCat) rows.push({ name: 'Wikimedia Commons', items: [{ id: '_wmsearch', title: 'Search Wikimedia', search: 'wm', img: 'icon.png' }].concat(
+    if (wmCat) rows.push({ name: 'Wikimedia Commons', items: (
       WM_GENRES.map(function (g) { var l = wmGenre(g[0]); return { id: '_wm' + g[0], title: g[1], wmGenre: g[0], img: l[0] && l[0].img, count: l.length }; })) });
     rows.push({ name: 'All', items: LIB.slice().sort(function (a, b) { return a.title.replace(/^The /, '').localeCompare(b.title.replace(/^The /, '')); }) });
     rows.push({ name: 'About', items: [{ id: '_credits', title: 'Credits', credits: true }] });
@@ -178,7 +178,7 @@
     var it = selectedItem(), p = positions();
     $('dTitle').textContent = it.title;
     if (it.credits) { $('dMeta').textContent = 'Where these films come from'; $('dResume').textContent = ''; }
-    else if (it.search) { $('dMeta').textContent = it.search === 'wm' ? 'Find any of ' + wmCat.length + ' free films' : 'Find any film or show by voice'; $('dResume').textContent = 'Pinch to search'; }
+    else if (it.search) { $('dMeta').textContent = it.search === 'all' ? 'Say a title, decade or genre, like \u201c60s horror\u201d' : it.search === 'wm' ? 'Find any of ' + wmCat.length + ' free films' : 'Find any film or show by voice'; $('dResume').textContent = 'Pinch to search'; }
     else if (it.wmGenre != null) { $('dMeta').textContent = 'Wikimedia Commons \u00b7 ' + it.count + ' films'; $('dResume').textContent = 'Pinch to browse'; }
     else if (it.wm) { $('dMeta').textContent = [it.year, mins(it.len)].filter(Boolean).join(' \u00b7 '); var pw = positions()[it.id]; $('dResume').textContent = pw ? 'Resume at ' + fmt(pw) : ''; }
     else if (it.decade) { $('dMeta').textContent = 'Archive films from the ' + it.title; $('dResume').textContent = 'Pinch to browse \u00b7 or search \u201c' + String(it.decade).slice(2) + 's horror\u201d'; }
@@ -209,8 +209,8 @@
       '&fl[]=identifier&fl[]=title&fl[]=year&sort[]=downloads+desc&rows=40&page=' + page + '&output=json';
     return getJSON(url).then(function (d) { return d.response; });
   }
-  function startBrowse(title, q, push) {
-    browse = { title: title, q: q, items: [], page: 0, total: null, idx: 0, loading: false };
+  function startBrowse(title, q, push, pre) {
+    browse = { title: title, q: q, items: (pre || []).slice(), pre: (pre || []).length, page: 0, total: null, idx: 0, loading: false };
     if (push) history.pushState({ screen: 'browse' }, '');
     mode = 'browse';
     renderBrowse();
@@ -226,10 +226,10 @@
     if (!browse || browse.local || browse.loading || (browse.total != null && browse.items.length >= browse.total)) return;
     browse.loading = true; var b = browse;
     iaQuery(b.q, b.page + 1).then(function (res) {
-      b.loading = false; b.page++; b.total = res.numFound;
-      res.docs.forEach(function (d) { b.items.push({ id: d.identifier, title: d.title || d.identifier, year: d.year, archive: true, img: thumb(d.identifier) }); });
+      b.loading = false; b.page++; b.total = (b.pre || 0) + res.numFound;
+      res.docs.forEach(function (d) { if (BY[d.identifier]) return; b.items.push({ id: d.identifier, title: d.title || d.identifier, year: d.year, archive: true, img: thumb(d.identifier) }); });
       if (mode === 'browse' && browse === b) renderBrowse();
-    }).catch(function () { b.loading = false; if (mode === 'browse') { $('title').textContent = 'The Archive is busy right now'; $('meta').textContent = 'Swipe back and try again in a minute'; } });
+    }).catch(function () { b.loading = false; if (b.items.length) { b.total = b.items.length; if (mode === 'browse' && browse === b) renderBrowse(); return; } if (mode === 'browse') { $('title').textContent = 'The Archive is busy right now'; $('meta').textContent = 'Swipe back and try again in a minute'; } });
   }
   function renderBrowse() {
     show('lib');
@@ -249,6 +249,9 @@
       $('meta').textContent = [it.year, mins(it.len), it.g.split('').filter(function (c) { return c !== 'D' && c !== 'L'; }).slice(0, 2).map(function (c) { return GNAME[c]; }).join(', ')].filter(Boolean).join(' \u00b7 ');
       var pp = positions()[it.id];
       $('resume').textContent = pp ? 'Resume at ' + fmt(pp) : '';
+    } else if (BY[it.id] === it) {
+      $('meta').textContent = 'In your library' + (it.year ? ' \u00b7 ' + it.year : '');
+      $('resume').textContent = '';
     } else {
       $('meta').textContent = it.year ? String(it.year) : 'Internet Archive';
       $('resume').textContent = '';
@@ -309,7 +312,7 @@
 
   function openSearch(target) {
     searchTarget = target || 'ia';
-    $('searchLabel').textContent = searchTarget === 'wm' ? 'Search Wikimedia Commons' : 'Search the Internet Archive';
+    $('searchLabel').textContent = searchTarget === 'all' ? 'Search everything' : searchTarget === 'wm' ? 'Search Wikimedia Commons' : 'Search the Internet Archive';
     mode = 'search';
     history.pushState({ screen: 'search' }, '');
     show('searchScreen');
@@ -318,6 +321,28 @@
   function runSearch() {
     var v = $('q').value.trim();
     if (!v) return;
+    if (searchTarget === 'all') {
+      var pa = parseQuery(v), nz = function (x) { return x.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9 ]/g, ' '); };
+      var ws = nz(pa.text).split(/\s+/).filter(Boolean);
+      var mine = LIB.filter(function (x) {
+        if (pa.from != null && x.year && !(x.year >= pa.from && x.year <= pa.to)) return false;
+        if (!ws.length) return false;
+        var t = nz(x.title); return ws.every(function (w) { return t.indexOf(w) >= 0; });
+      });
+      var wmr = (wmCat || []).filter(function (x) {
+        if (pa.from != null && !(x.year >= pa.from && x.year <= pa.to)) return false;
+        if (pa.genres.length && !pa.genres.some(function (g) { return x.g.indexOf(g[1]) >= 0; })) return false;
+        var t = nz(x.title); return ws.every(function (w) { return t.indexOf(w) >= 0; });
+      });
+      var aparts = ['mediatype:movies'];
+      if (pa.text) aparts.push('title:(' + pa.text + ')');
+      if (pa.from != null) aparts.push('year:[' + pa.from + ' TO ' + pa.to + ']');
+      if (pa.genres.length) aparts.push('(' + pa.genres.map(function (g) { return g[0]; }).join(' OR ') + ')');
+      if (!pa.text) aparts.push(SCOPE);
+      history.replaceState({ screen: 'browse' }, '');
+      startBrowse(v, aparts.join(' AND '), false, mine.concat(wmr.slice(0, 60)));
+      return;
+    }
     if (searchTarget === 'wm') {
       var norm = function (x) { return x.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9 ]/g, ' '); };
       var p = parseQuery(v);
@@ -476,7 +501,7 @@
       else if (k === 'ArrowLeft' && n) browse.idx = Math.max(0, browse.idx - 1);
       else if (k === 'ArrowDown' && n) browse.idx = Math.min(n - 1, browse.idx + 10);
       else if (k === 'ArrowUp' && n) browse.idx = Math.max(0, browse.idx - 10);
-      else if (k === 'Enter' && n) { e.preventDefault(); var bi = browse.items[browse.idx]; if (bi.wm) playWM(bi, true); else openArchiveItem(bi, true); return; }
+      else if (k === 'Enter' && n) { e.preventDefault(); var bi = browse.items[browse.idx]; if (bi.wm) playWM(bi, true); else if (BY[bi.id] === bi) { if (bi.show) openShow(bi); else { currentShow = null; play(bi, true); } } else openArchiveItem(bi, true); return; }
       else if (k === 'Escape' || k === 'Backspace') { e.preventDefault(); history.back(); return; }
       else return;
       renderBrowse(); e.preventDefault(); return;
