@@ -169,7 +169,7 @@
     files.forEach(function (f) {
       if (!/\.(mp4|m4v)$/i.test(f.name)) return;
       if (/sample|trailer/i.test(f.name) && files.length > 4) return;
-      var key = f.original || f.name.replace(/(\.ia)?(_512kb)?\.(mp4|m4v)$/i, '');
+      var key = String(f.original || f.name).replace(/\.[^.\/]+$/, '').replace(/(\.ia)?(_512kb)?$/i, '');
       if (!groups[key]) { groups[key] = []; order.push(key); }
       groups[key].push(f);
     });
