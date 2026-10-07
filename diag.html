@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=600, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Cinema Check</title>
+<link rel="icon" type="image/png" sizes="192x192" href="icon.png">
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{width:600px;height:600px;overflow:hidden;background:#000;color:#eee;font-family:system-ui,sans-serif}
+  h1{font-size:22px;color:#7fe6ff;text-align:center;margin:20px 0 14px;letter-spacing:.1em;text-transform:uppercase}
+  .r{display:flex;justify-content:space-between;font-size:19px;padding:9px 30px;border-bottom:1px solid #1c1c1c}
+  .ok{color:#7dff9b}.bad{color:#ff8a8a}.wait{color:#ffd166}
+  #foot{position:absolute;bottom:18px;left:0;right:0;text-align:center;font-size:16px;color:#999}
+  video{position:absolute;width:1px;height:1px;opacity:0}
+</style>
+</head>
+<body>
+<h1>Glasses Cinema Check</h1>
+<div id="list"></div>
+<div id="foot">Read me the red lines &middot; swipe back to exit</div>
+<script>
+  var tests = [
+    ['Internet connection', function () { return navigator.onLine ? Promise.resolve('online') : Promise.reject('offline'); }],
+    ['GitHub (this app)', function () { return get('library.js?x=' + Date.now(), 'text').then(function (t) { return t.length > 100 ? 'ok' : 'empty'; }); }],
+    ['Archive search', function () { return get('https://archive.org/advancedsearch.php?q=title:(charade)&fl[]=identifier&rows=1&output=json', 'json').then(function (d) { return d.response.numFound + ' found'; }); }],
+    ['Archive item info', function () { return get('https://archive.org/metadata/his_girl_friday', 'json').then(function (d) { return (d.files || []).length + ' files'; }); }],
+    ['Archive thumbnail', function () { return img('https://archive.org/services/img/his_girl_friday'); }],
+    ['Archive video', function () { return video('https://archive.org/download/his_girl_friday/his_girl_friday.mp4'); }],
+    ['GitHub video', function () { return video('media/pioneer_e5.mp4'); }]
+  ];
+  function get(url, kind) {
+    var ctl = window.AbortController ? new AbortController() : null;
+    var t = setTimeout(function () { if (ctl) ctl.abort(); }, 20000);
+    return fetch(url, ctl ? { signal: ctl.signal } : {}).then(function (r) {
+      clearTimeout(t);
+      if (!r.ok) throw 'HTTP ' + r.status;
+      return kind === 'json' ? r.json() : r.text();
+    }, function (e) { clearTimeout(t); throw (e && e.name === 'AbortError') ? 'timed out' : 'blocked or failed'; });
+  }
+  function img(url) {
+    return new Promise(function (res, rej) {
+      var i = new Image(), t = setTimeout(function () { rej('timed out'); }, 20000);
+      i.onload = function () { clearTimeout(t); res(i.naturalWidth + 'px'); };
+      i.onerror = function () { clearTimeout(t); rej('failed'); };
+      i.src = url + '?x=' + Date.now();
+    });
+  }
+  function video(url) {
+    return new Promise(function (res, rej) {
+      var v = document.createElement('video'); v.muted = true; v.preload = 'auto'; document.body.appendChild(v);
+      var t = setTimeout(function () { v.removeAttribute('src'); v.load(); rej('timed out'); }, 25000);
+      v.addEventListener('loadeddata', function () { clearTimeout(t); res(v.videoWidth + 'x' + v.videoHeight); v.removeAttribute('src'); v.load(); });
+      v.addEventListener('error', function () { clearTimeout(t); rej('error ' + (v.error && v.error.code)); });
+      v.src = url;
+    });
+  }
+  var list = document.getElementById('list');
+  tests.forEach(function (tst, i) {
+    var row = document.createElement('div'); row.className = 'r';
+    row.innerHTML = '<span>' + tst[0] + '</span><span class="wait" id="s' + i + '">checking\u2026</span>';
+    list.appendChild(row);
+  });
+  (function run(i) {
+    if (i >= tests.length) return;
+    var el = document.getElementById('s' + i);
+    tests[i][1]().then(function (m) { el.className = 'ok'; el.textContent = '\u2713 ' + m; }, function (e) { el.className = 'bad'; el.textContent = '\u2717 ' + e; })
+      .then(function () { run(i + 1); });
+  })(0);
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape' || e.key === 'Backspace') history.back(); });
+</script>
+</body>
+</html>
