@@ -29,6 +29,12 @@
   function load(k, d) { try { return JSON.parse(localStorage.getItem(k)) || d; } catch (e) { return d; } }
   function positions() { return load(KEY, {}); }
   function store(p) { try { localStorage.setItem(KEY, JSON.stringify(p)); } catch (e) {} }
+  function getJSON(url, tries) {
+    tries = tries || 3;
+    return fetch(url).then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+      .catch(function (e) { if (tries <= 1) throw e; return new Promise(function (res) { setTimeout(res, 1500); }).then(function () { return getJSON(url, tries - 1); }); });
+  }
+  function short(t, n) { t = String(t || ''); n = n || 58; return t.length > n ? t.slice(0, n - 1).replace(/\s+\S*$/, '') + '\u2026' : t; }
   function thumb(id) { return IA + '/services/img/' + encodeURIComponent(id); }
   function imgFor(it) { return it.img || (it.credits ? 'icon.png' : 'media/' + it.id + '.jpg'); }
 
@@ -119,7 +125,7 @@
   function iaQuery(q, page) {
     var url = IA + '/advancedsearch.php?q=' + encodeURIComponent(q) +
       '&fl[]=identifier&fl[]=title&fl[]=year&sort[]=downloads+desc&rows=40&page=' + page + '&output=json';
-    return fetch(url).then(function (r) { return r.json(); }).then(function (d) { return d.response; });
+    return getJSON(url).then(function (d) { return d.response; });
   }
   function startBrowse(title, q, push) {
     browse = { title: title, q: q, items: [], page: 0, total: null, idx: 0, loading: false };
@@ -135,7 +141,7 @@
       b.loading = false; b.page++; b.total = res.numFound;
       res.docs.forEach(function (d) { b.items.push({ id: d.identifier, title: d.title || d.identifier, year: d.year, archive: true, img: thumb(d.identifier) }); });
       if (mode === 'browse' && browse === b) renderBrowse();
-    }).catch(function () { b.loading = false; if (mode === 'browse') { $('title').textContent = 'Could not reach the Internet Archive'; $('meta').textContent = 'Check your connection and try again'; } });
+    }).catch(function () { b.loading = false; if (mode === 'browse') { $('title').textContent = 'The Archive is not responding'; $('meta').textContent = 'Swipe back and try again'; } });
   }
   function renderBrowse() {
     show('lib');
@@ -143,14 +149,14 @@
     $('hint').textContent = 'Swipe to browse \u00b7 pinch to open';
     if (!browse.items.length) {
       $('poster').src = 'icon.png';
-      $('title').textContent = browse.total === 0 ? 'No results' : 'Loading\u2026';
+      $('title').textContent = browse.total === 0 ? 'No results' : 'Searching the Archive\u2026';
       $('meta').textContent = browse.total === 0 ? 'Swipe back and try another search' : '';
       $('resume').textContent = ''; $('dots').textContent = '';
       return;
     }
     var it = browse.items[browse.idx];
     $('poster').src = it.img;
-    $('title').textContent = it.title;
+    $('title').textContent = short(it.title);
     $('meta').textContent = it.year ? String(it.year) : 'Internet Archive';
     $('resume').textContent = '';
     $('dots').textContent = (browse.idx + 1) + ' of ' + (browse.total || browse.items.length);
@@ -186,9 +192,9 @@
     show('lib');
     $('hdr').textContent = 'Internet Archive';
     $('poster').src = thumb(it.id);
-    $('title').textContent = it.title; $('meta').textContent = 'Loading\u2026'; $('resume').textContent = ''; $('dots').textContent = '';
+    $('title').textContent = short(it.title); $('meta').textContent = 'Loading\u2026'; $('resume').textContent = ''; $('dots').textContent = '';
     if (push) history.pushState({ screen: 'show', archive: it.id, title: it.title }, '');
-    fetch(IA + '/metadata/' + encodeURIComponent(it.id)).then(function (r) { return r.json(); }).then(function (meta) {
+    getJSON(IA + '/metadata/' + encodeURIComponent(it.id)).then(function (meta) {
       var title = (meta.metadata && meta.metadata.title) || it.title;
       var vids = playableFiles(meta);
       if (!vids.length) { $('meta').textContent = 'No playable video in this item'; return; }
@@ -229,7 +235,7 @@
     var ep = currentShow.eps[epIdx], p = positions();
     $('hdr').textContent = currentShow.title;
     $('poster').src = currentShow.img || ('media/' + currentShow.id + '.jpg');
-    $('title').textContent = ep.title;
+    $('title').textContent = short(ep.title);
     var bits = [];
     if (ep.s) bits.push('Season ' + ep.s, 'Episode ' + ep.e);
     else if (currentShow.eps.length > 1) bits.push('Part ' + ep.n);
