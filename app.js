@@ -61,6 +61,7 @@
   var epIdx = 0, current = null, currentShow = null, hudTimer = null, toastTimer = null;
   var browse = null;            // {title, q, items:[], page, total, idx, loading}
   var TILE_W = 214, ROW_H = 168;
+  var historyChoice = 0, historyCleared = false;
 
   function fmt(s) {
     s = Math.max(0, Math.floor(s || 0));
@@ -109,7 +110,7 @@
     play({ id: it.id, title: it.title, len: it.len, u: wmSrc(it) }, push);
   }
   function thumb(id) { return IA + '/services/img/' + encodeURIComponent(id); }
-  function imgFor(it) { return it.img || (it.credits ? 'icon.png' : 'media/' + it.id + '.jpg'); }
+  function imgFor(it) { return it.img || (it.credits || it.clearHistory ? 'icon.png' : 'media/' + it.id + '.jpg'); }
 
   function savePos() {
     if (!current) return;
@@ -126,7 +127,7 @@
     try { localStorage.setItem(RECENT, JSON.stringify(r.slice(0, 12))); } catch (e) {}
   }
   function show(screen) {
-    ['home', 'lib', 'player', 'creditsScreen', 'searchScreen'].forEach(function (s) { $(s).classList.toggle('on', s === screen); });
+    ['home', 'lib', 'player', 'creditsScreen', 'searchScreen', 'historyScreen'].forEach(function (s) { $(s).classList.toggle('on', s === screen); });
     if (screen !== 'searchScreen') $('focusSink').focus();
   }
 
@@ -139,7 +140,10 @@
       else cont.push({ id: x.id, title: x.title, archive: true, img: thumb(x.id) });
     });
     cont.sort(function (a, b) { return (p['ts_' + b.id] || 0) - (p['ts_' + a.id] || 0); });
-    rows = [{ name: 'Search', items: [{ id: '_all', title: 'Search Everything', search: 'all', img: 'icon.png' }] }];
+    rows = [{ name: 'Search', items: [
+      { id: '_all', title: 'Search Everything', search: 'all', img: 'icon.png' },
+      { id: '_history', title: 'Clear Cache', clearHistory: true }
+    ] }];
     if (cont.length) rows.push({ name: 'Continue Watching', items: cont });
     CATS.forEach(function (c) { rows.push({ name: c.name, items: c.ids.map(function (i) { return BY[i]; }) }); });
     rows.push({ name: 'Internet Archive', items: (
@@ -177,7 +181,8 @@
     $('rows').style.transform = 'translateY(' + (-top) + 'px)';
     var it = selectedItem(), p = positions();
     $('dTitle').textContent = it.title;
-    if (it.credits) { $('dMeta').textContent = 'Where these films come from'; $('dResume').textContent = ''; }
+    if (it.clearHistory) { $('dMeta').textContent = 'Clear viewing history on this device'; $('dResume').textContent = 'Pinch to review before deleting'; }
+    else if (it.credits) { $('dMeta').textContent = 'Where these films come from'; $('dResume').textContent = ''; }
     else if (it.search) { $('dMeta').textContent = it.search === 'all' ? 'Say a title, decade or genre, like \u201c60s horror\u201d' : it.search === 'wm' ? 'Find any of ' + wmCat.length + ' free films' : 'Find any film or show by voice'; $('dResume').textContent = 'Pinch to search'; }
     else if (it.wmGenre != null) { $('dMeta').textContent = 'Wikimedia Commons \u00b7 ' + it.count + ' films'; $('dResume').textContent = 'Pinch to browse'; }
     else if (it.wm) { $('dMeta').textContent = [it.year, mins(it.len)].filter(Boolean).join(' \u00b7 '); var pw = positions()[it.id]; $('dResume').textContent = pw ? 'Resume at ' + fmt(pw) : ''; }
@@ -202,6 +207,47 @@
     show('home');
   }
   function selectedItem() { var r = rows[rowIdx]; return r.items[colIdx[r.name] || 0]; }
+
+  // ---------- Device-local history ----------
+  function updateHistoryChoice() {
+    $('historyCancel').classList.toggle('sel', historyChoice === 0);
+    $('historyDelete').classList.toggle('sel', historyChoice === 1);
+  }
+  function openHistory() {
+    mode = 'history'; historyChoice = 0; historyCleared = false;
+    $('historyTitle').textContent = 'Clear Cache?';
+    $('historyMessage').textContent = 'Clear Continue Watching, saved playback positions, watched markers and recently opened titles on this device only. This cannot be undone.';
+    $('historyCancel').textContent = 'Cancel';
+    $('historyDelete').hidden = false;
+    $('historyHint').textContent = 'Swipe left/right to choose. Pinch to select. Swipe back to cancel.';
+    updateHistoryChoice();
+    history.pushState({ screen: 'history' }, '');
+    show('historyScreen');
+  }
+  function deleteHistory() {
+    if (mode !== 'history' || historyCleared) return;
+    try {
+      // Never clear unrelated applications or browser preferences.
+      localStorage.removeItem(KEY);
+      localStorage.removeItem(RECENT);
+      if (localStorage.getItem(KEY) !== null || localStorage.getItem(RECENT) !== null) throw new Error('History remains');
+    } catch (e) {
+      historyChoice = 0;
+      $('historyMessage').textContent = 'Could not fully clear history. Device storage may be blocked. Please try again.';
+      updateHistoryChoice();
+      return;
+    }
+    historyCleared = true; historyChoice = 0;
+    current = null; currentShow = null;
+    $('historyTitle').textContent = 'Cache Cleared';
+    $('historyMessage').textContent = 'Continue Watching and saved viewing history have been cleared on this device. Your movie library is unchanged.';
+    $('historyCancel').textContent = 'Back to Library';
+    $('historyDelete').hidden = true;
+    $('historyHint').textContent = 'Pinch or swipe back to return.';
+    updateHistoryChoice();
+  }
+  $('historyCancel').addEventListener('click', function () { history.back(); });
+  $('historyDelete').addEventListener('click', deleteHistory);
 
   // ---------- Internet Archive: browse + search ----------
   function iaQuery(q, page) {
@@ -481,6 +527,16 @@
       else if (k === 'Escape') { e.preventDefault(); history.back(); }
       return;
     }
+    if (mode === 'history') {
+      if (k === 'Escape' || k === 'Backspace') { history.back(); }
+      else if (k === 'ArrowLeft' || k === 'ArrowUp') { historyChoice = 0; updateHistoryChoice(); }
+      else if (k === 'ArrowRight' || k === 'ArrowDown') { historyChoice = historyCleared ? 0 : 1; updateHistoryChoice(); }
+      else if (k === 'Enter' || k === ' ') {
+        if (historyChoice === 1 && !historyCleared) deleteHistory();
+        else history.back();
+      } else return;
+      e.preventDefault(); return;
+    }
     if (mode === 'player') {
       if (k === 'Enter' || k === ' ') { if (vid.paused) vid.play(); else vid.pause(); toast(vid.paused ? '\u275a\u275a' : '\u25b6'); }
       else if (k === 'ArrowRight') { vid.currentTime = Math.min((vid.duration || 1e9) - 1, vid.currentTime + 30); toast('+30s'); }
@@ -527,7 +583,8 @@
     else if (k === 'Enter') {
       var it = selectedItem();
       e.preventDefault();
-      if (it.credits) { mode = 'credits'; show('creditsScreen'); history.pushState({ screen: 'credits' }, ''); }
+      if (it.clearHistory) openHistory();
+      else if (it.credits) { mode = 'credits'; show('creditsScreen'); history.pushState({ screen: 'credits' }, ''); }
       else if (it.search) openSearch(it.search);
       else if (it.wmGenre != null) startLocalBrowse(it.title, wmGenre(it.wmGenre), true);
       else if (it.wm) playWM(it, true);
