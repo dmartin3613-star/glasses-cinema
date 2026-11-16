@@ -1,4 +1,5 @@
 (function () {
+  var INITIAL_SEARCH = location.search;
   var LIB = window.LIBRARY, CATS = window.CATEGORIES;
   var BY = {}; LIB.forEach(function (x) { BY[x.id] = x; });
   var KEY = 'gc_positions_v2', RECENT = 'gc_archive_recent';
@@ -853,5 +854,14 @@
   else if (openMatch) openQueued();
   loadWM().then(function () { if (mode === 'home') renderHome(); }).catch(function () {});
   netState();
-  if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(function () {});
+  if ('serviceWorker' in navigator) {
+    // When a newer Danflicks arrives, reload once (but never in the middle of a movie).
+    var hadController = !!navigator.serviceWorker.controller, reloaded = false;
+    navigator.serviceWorker.addEventListener('controllerchange', function () {
+      if (!hadController || reloaded) return;
+      var go = function () { if (reloaded) return; if (mode === 'player' && !vid.paused) return setTimeout(go, 5000); reloaded = true; if (!party.net && INITIAL_SEARCH) location.replace(location.pathname + INITIAL_SEARCH); else location.reload(); };
+      go();
+    });
+    navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).then(function (r) { r.update(); }).catch(function () {});
+  }
 })();
