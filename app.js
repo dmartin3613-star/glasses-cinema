@@ -529,7 +529,7 @@
   var PNAME = 'df_party_name', PCODE = 'df_party_code';
   var party = { net: null, code: null, me: 'd' + Math.random().toString(36).slice(2, 10), name: null, peers: {}, actor: null,
     lastShared: null, quietUntil: 0, hb: null, view: 'menu', choice: 0, buttons: [], pendingJoin: null, status: '',
-    synced: false, loadingRemote: false, note: '', noteUntil: 0 };
+    synced: false, loadingRemote: false, note: '', noteUntil: 0, pendingOpen: null };
   try { party.name = localStorage.getItem(PNAME); } catch (e) {}
   var lastKeyAt = 0;
   var SITE = location.origin + location.pathname.replace(/index\.html$/, '');
@@ -654,8 +654,8 @@
     var code = savedCode(), v = party.view, them = partnerName();
     if (v === 'who') return { title: 'Who is watching here?', msg: 'Pick once on each device. When you pause or skip, the other screen shows your name.',
       buttons: [['Dan', function () { setName('Dan'); }], ['Jen', function () { setName('Jen'); }]], hint: 'Swipe left/right to choose. Pinch to select.' };
-    if (v === 'pending') return { title: 'Join the party?', msg: 'You were invited to viewing party ' + party.pendingJoin + '. Join as ' + party.name + '?',
-      buttons: [['Join Party', function () { var c = party.pendingJoin; party.pendingJoin = null; joinParty(c, false); party.view = 'live'; renderParty(); }],
+    if (v === 'pending') return { title: 'Join the party?', msg: 'You were invited to viewing party ' + party.pendingJoin + (party.pendingOpen ? ' to watch ' + party.pendingOpen.title : '') + '. Join as ' + party.name + '?',
+      buttons: [['Join Party', function () { var c = party.pendingJoin; party.pendingJoin = null; joinParty(c, false); party.view = 'live'; renderParty(); openQueued(); }],
         ['Not Now', function () { party.pendingJoin = null; history.back(); }]], hint: 'Swipe left/right to choose. Pinch to select.' };
     if (v === 'join') return { title: 'Join a party', msg: 'Say or type the 6 digit code from ' + them + '\u2019s screen.', input: true,
       buttons: [['Join', submitCode], ['Cancel', function () { party.view = 'menu'; renderParty(); }]], hint: 'Pinch the box to dictate. Pinch again to join.' };
@@ -675,6 +675,12 @@
     btns.push(['Join With Code', function () { party.view = 'join'; party.choice = 0; renderParty(); }]);
     return { title: 'Viewing Party', msg: 'Watch the same movie together with ' + them + '. Whoever picks a movie starts it on both screens, and pause, play and skips stay in sync.',
       buttons: btns, hint: 'Watching as ' + party.name + '. Swipe down to switch names.' };
+  }
+  // A link can queue a title: ?party=123456&open=<archive id>. After joining, the title opens ready to pinch.
+  function openQueued() {
+    var q = party.pendingOpen; if (!q) return;
+    party.pendingOpen = null; currentShow = null;
+    openArchiveItem({ id: q.id, title: q.title }, true);
   }
   function setName(n) {
     party.name = n; try { localStorage.setItem(PNAME, n); } catch (e) {}
@@ -838,10 +844,13 @@
   window.addEventListener('offline', netState);
 
   var inviteMatch = /[?&]party=(\d{6})/.exec(location.search);
-  history.replaceState({ screen: 'home' }, '', inviteMatch ? location.pathname : undefined);
+  var openMatch = /[?&]open=([A-Za-z0-9._-]{1,100})/.exec(location.search);
+  if (openMatch) party.pendingOpen = { id: openMatch[1], title: openMatch[1] === 'pcu-1994' ? 'PCU (1994)' : openMatch[1] };
+  history.replaceState({ screen: 'home' }, '', inviteMatch || openMatch ? location.pathname : undefined);
   renderCredits();
   renderHome();
   if (inviteMatch) { party.pendingJoin = inviteMatch[1]; openParty(); }
+  else if (openMatch) openQueued();
   loadWM().then(function () { if (mode === 'home') renderHome(); }).catch(function () {});
   netState();
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(function () {});
