@@ -127,8 +127,9 @@
     try { localStorage.setItem(RECENT, JSON.stringify(r.slice(0, 12))); } catch (e) {}
   }
   function show(screen) {
-    ['home', 'lib', 'player', 'creditsScreen', 'searchScreen', 'historyScreen'].forEach(function (s) { $(s).classList.toggle('on', s === screen); });
+    ['home', 'lib', 'player', 'creditsScreen', 'searchScreen', 'historyScreen', 'partyScreen'].forEach(function (s) { $(s).classList.toggle('on', s === screen); });
     if (screen !== 'searchScreen') $('focusSink').focus();
+    $('partyBadge').classList.toggle('on', !!party.net && screen !== 'player' && screen !== 'partyScreen');
   }
 
   // ---------- Home (category rows) ----------
@@ -142,6 +143,7 @@
     cont.sort(function (a, b) { return (p['ts_' + b.id] || 0) - (p['ts_' + a.id] || 0); });
     rows = [{ name: 'Search', items: [
       { id: '_all', title: 'Search Everything', search: 'all', img: 'icon.png' },
+      { id: '_party', title: 'Viewing Party', party: true, img: 'icon.png' },
       { id: '_history', title: 'Clear Cache', clearHistory: true }
     ] }];
     if (cont.length) rows.push({ name: 'Continue Watching', items: cont });
@@ -181,7 +183,8 @@
     $('rows').style.transform = 'translateY(' + (-top) + 'px)';
     var it = selectedItem(), p = positions();
     $('dTitle').textContent = it.title;
-    if (it.clearHistory) { $('dMeta').textContent = 'Clear viewing history on this device'; $('dResume').textContent = 'Pinch to review before deleting'; }
+    if (it.party) { $('dMeta').textContent = party.net ? partySummary() : 'Watch together, in sync on two devices'; $('dResume').textContent = party.net ? 'Pinch for party details' : 'Pinch to start or join'; }
+    else if (it.clearHistory) { $('dMeta').textContent = 'Clear viewing history on this device'; $('dResume').textContent = 'Pinch to review before deleting'; }
     else if (it.credits) { $('dMeta').textContent = 'Where these films come from'; $('dResume').textContent = ''; }
     else if (it.search) { $('dMeta').textContent = it.search === 'all' ? 'Say a title, decade or genre, like \u201c60s horror\u201d' : it.search === 'wm' ? 'Find any of ' + wmCat.length + ' free films' : 'Find any film or show by voice'; $('dResume').textContent = 'Pinch to search'; }
     else if (it.wmGenre != null) { $('dMeta').textContent = 'Wikimedia Commons \u00b7 ' + it.count + ' films'; $('dResume').textContent = 'Pinch to browse'; }
@@ -466,31 +469,43 @@
     $('fill').style.width = d ? (100 * (vid.currentTime / d)) + '%' : '0';
     if (!vid.seeking && vid.readyState >= 2) $('state').textContent = vid.paused ? 'Paused' : '';
   }
-  function play(item, push) {
+  function play(item, push, startAt, autoplay) {
     current = item;
     mode = 'player';
     $('ptitle').textContent = item.s ? 'S' + item.s + ' E' + item.e + ' \u00b7 ' + item.title : item.title;
     $('state').textContent = 'Loading\u2026';
     vid.src = item.u;
-    var start = positions()[item.id] || 0;
+    var start = startAt != null ? startAt : (positions()[item.id] || 0);
+    item._start = start;
     vid.addEventListener('loadedmetadata', function once() {
       vid.removeEventListener('loadedmetadata', once);
       if (start) vid.currentTime = start;
     });
     show('player');
     if (push) history.pushState({ screen: 'player' }, '');
-    var pr = vid.play();
-    if (pr && pr.catch) pr.catch(function () { $('state').textContent = 'Pinch to play'; pokeHud(); });
-    pokeHud(); updateHud();
+    if (autoplay !== false) {
+      var pr = vid.play();
+      if (pr && pr.catch) pr.catch(function () { $('state').textContent = 'Pinch to play'; pokeHud(); });
+    }
+    pokeHud(); updateHud(); partyUI();
+    sendState('load');
   }
   function stopVideo() {
     savePos();
     vid.pause(); vid.removeAttribute('src'); vid.load();
     current = null;
+    sendState('stop');
   }
   vid.addEventListener('timeupdate', updateHud);
-  vid.addEventListener('pause', function () { updateHud(); pokeHud(); savePos(); });
-  vid.addEventListener('play', function () { updateHud(); pokeHud(); });
+  vid.addEventListener('pause', function () { updateHud(); pokeHud(); savePos(); sendState('pause'); });
+  vid.addEventListener('play', function () { updateHud(); pokeHud(); sendState('play'); });
+  var seekTimer = null;
+  vid.addEventListener('seeked', function () { clearTimeout(seekTimer); seekTimer = setTimeout(function () { sendState('seek'); }, 300); });
+  vid.addEventListener('canplay', function () {
+    if (!party.loadingRemote) return;
+    party.loadingRemote = false; party.quietUntil = Date.now() + 1500;
+    psend({ k: 'ask' }); // get a fresh position now that this device is ready
+  });
   vid.addEventListener('playing', function () { $('state').textContent = ''; });
   vid.addEventListener('waiting', function () { $('state').textContent = 'Loading\u2026'; });
   vid.addEventListener('error', function () { if (current) { $('state').textContent = 'Could not load video'; pokeHud(); } });
@@ -509,6 +524,206 @@
       '<p style="margin-top:12px">' + LIB.map(function (f) { return esc(f.title) + ' (' + f.year + ')'; }).join(' \u00b7 ') + '</p>';
   }
 
+  // ---------- Viewing Party ----------
+  // Two devices share one party code. Play, pause, skips and movie choice are mirrored through a public relay.
+  var PNAME = 'df_party_name', PCODE = 'df_party_code';
+  var party = { net: null, code: null, me: 'd' + Math.random().toString(36).slice(2, 10), name: null, peers: {}, actor: null,
+    lastShared: null, quietUntil: 0, hb: null, view: 'menu', choice: 0, buttons: [], pendingJoin: null, status: '',
+    synced: false, loadingRemote: false, note: '', noteUntil: 0 };
+  try { party.name = localStorage.getItem(PNAME); } catch (e) {}
+  var lastKeyAt = 0;
+  var SITE = location.origin + location.pathname.replace(/index\.html$/, '');
+
+  function partnerName() { return party.name === 'Jen' ? 'Dan' : 'Jen'; }
+  function savedCode() { try { return localStorage.getItem(PCODE); } catch (e) { return null; } }
+  function peerNames() { return Object.keys(party.peers).map(function (k) { return party.peers[k].name || 'Guest'; }); }
+  function partySummary() {
+    if (!party.net) return '';
+    if (party.status !== 'online') return 'Party ' + party.code + ' \u00b7 connecting\u2026';
+    var n = peerNames();
+    return 'Party ' + party.code + ' \u00b7 ' + (n.length ? n.join(' & ') + ' is here' : 'waiting for ' + partnerName());
+  }
+  function partyNote(t) { party.note = t; party.noteUntil = Date.now() + 4000; partyUI(); setTimeout(partyUI, 4100); }
+  function partyUI() {
+    var b = $('partyBadge');
+    b.textContent = party.net ? '\u25cf ' + partySummary() : '';
+    b.classList.toggle('on', !!party.net && mode !== 'player' && mode !== 'party');
+    $('pinfo').textContent = !party.net ? '' : (Date.now() < party.noteUntil ? party.note : partySummary());
+    if (mode === 'party') renderParty();
+    if (mode === 'home' && selectedItem() && selectedItem().party) updateHome();
+  }
+  function psend(m) { if (!party.net) return; m.v = 1; m.from = party.me; m.name = party.name; party.net.send(m); }
+  function joinParty(code, asHost) {
+    leaveParty();
+    party.code = code; party.actor = asHost ? party.me : null; party.peers = {}; party.lastShared = null; party.synced = !!asHost; party.status = 'connecting';
+    try { localStorage.setItem(PCODE, code); } catch (e) {}
+    party.net = new PartyNet('danflicks/party/v1/' + code, onPartyMsg, function (st) {
+      party.status = st;
+      if (st === 'online') psend({ k: 'hi' });
+      partyUI();
+    });
+    party.hb = setInterval(heartbeat, 15000);
+    partyUI();
+  }
+  function leaveParty() {
+    if (!party.net) return;
+    psend({ k: 'bye' });
+    var n = party.net; party.net = null; setTimeout(function () { n.close(); }, 300);
+    clearInterval(party.hb); party.peers = {}; party.status = ''; party.loadingRemote = false; party.quietUntil = 0;
+    partyUI();
+  }
+  function localState() {
+    if (!current) return { item: null };
+    return {
+      item: { id: current.id, title: current.title, len: current.len, u: current.u, s: current.s, e: current.e },
+      show: currentShow && BY[currentShow.id] === currentShow ? currentShow.id : null, ep: epIdx,
+      playing: !vid.paused, pos: vid.readyState >= 1 ? vid.currentTime : (current._start || 0)
+    };
+  }
+  function shareRec(s) { return { id: s.item && s.item.id, playing: s.playing, pos: s.pos, t: Date.now() }; }
+  function expectedPos(r) { return r.pos + (r.playing ? (Date.now() - r.t) / 1000 : 0); }
+  function sendState(why) {
+    if (!party.net) return;
+    if (why !== 'stop' && Date.now() < party.quietUntil) return;
+    var s = localState();
+    if (!s.item && why !== 'stop') return;
+    var r = party.lastShared;
+    if (why !== 'load' && why !== 'stop' && r && r.id === s.item.id && r.playing === s.playing && Math.abs(expectedPos(r) - s.pos) < 2) return;
+    s.k = 'state'; s.why = why; psend(s);
+    party.actor = party.me; party.lastShared = shareRec(s); party.synced = true;
+  }
+  function heartbeat() {
+    var now = Date.now();
+    Object.keys(party.peers).forEach(function (k) { if (now - party.peers[k].seen > 45000) delete party.peers[k]; });
+    var s = localState(); s.k = 'here'; s.actor = party.actor; psend(s);
+    partyUI();
+  }
+  function onPartyMsg(m) {
+    if (!m || m.v !== 1 || m.from === party.me || !party.net) return;
+    var isNew = !party.peers[m.from];
+    if (m.k === 'bye') { delete party.peers[m.from]; partyNote((m.name || 'Guest') + ' left the party'); return; }
+    party.peers[m.from] = { name: m.name, seen: Date.now() };
+    if (isNew) partyNote((m.name || 'Guest') + ' joined the party');
+    if (m.k === 'hi') { heartbeat(); return; }
+    if (m.k === 'ask') {
+      if (party.actor === party.me && current) { var s = localState(); s.k = 'state'; s.why = 'sync'; psend(s); party.lastShared = shareRec(s); }
+      return;
+    }
+    if (m.k === 'state') { party.actor = m.from; applyRemote(m, false); partyUI(); return; }
+    if (m.k === 'here') {
+      if (!party.actor && m.actor) party.actor = m.actor;
+      if (m.from === party.actor && m.item) applyRemote(m, true);
+      partyUI();
+    }
+  }
+  function applyRemote(m, soft) {
+    var who = m.name || 'Guest';
+    if (!m.item) {
+      party.lastShared = null;
+      if (current && m.why === 'stop' && mode === 'player') {
+        party.quietUntil = Date.now() + 1200; vid.pause();
+        setTimeout(function () { $('state').textContent = who + ' stopped the movie'; pokeHud(); }, 80);
+      }
+      return;
+    }
+    party.lastShared = shareRec(m);
+    if (!current || current.id !== m.item.id) {
+      if (soft && party.synced && mode !== 'player') return; // browsing on my own; wait for their next action
+      var item = { id: m.item.id, title: m.item.title, len: m.item.len, u: m.item.u, s: m.item.s, e: m.item.e };
+      if (/^wm:/.test(item.id) && wmById[item.id]) item.u = wmSrc(wmById[item.id]);
+      if (m.show && BY[m.show]) { currentShow = BY[m.show]; epIdx = m.ep || 0; } else currentShow = null;
+      if (current) savePos();
+      party.quietUntil = Infinity; party.loadingRemote = true; party.synced = true;
+      play(item, mode !== 'player', m.pos + (m.playing ? 1 : 0), !!m.playing);
+      partyNote(who + ' started ' + short(item.title, 34));
+      return;
+    }
+    party.synced = true;
+    var target = m.pos + (m.playing ? 0.3 : 0), drift = Math.abs(vid.currentTime - target);
+    party.quietUntil = Math.max(party.quietUntil === Infinity ? 0 : party.quietUntil, Date.now() + 1200);
+    if (vid.readyState >= 1 && drift > (soft ? 3 : (m.playing ? 1.5 : 0.4))) vid.currentTime = target;
+    if (m.playing && vid.paused) { var pr = vid.play(); if (pr && pr.catch) pr.catch(function () { $('state').textContent = 'Pinch to play'; pokeHud(); }); }
+    if (!m.playing && !vid.paused) vid.pause();
+    if (!soft) {
+      var msg = { play: who + ' pressed play', pause: who + ' paused', seek: who + ' skipped to ' + fmt(m.pos), load: who + ' restarted', sync: '' }[m.why];
+      if (msg) { partyNote(msg); pokeHud(); }
+    }
+  }
+
+  function partyView() {
+    var code = savedCode(), v = party.view, them = partnerName();
+    if (v === 'who') return { title: 'Who is watching here?', msg: 'Pick once on each device. When you pause or skip, the other screen shows your name.',
+      buttons: [['Dan', function () { setName('Dan'); }], ['Jen', function () { setName('Jen'); }]], hint: 'Swipe left/right to choose. Pinch to select.' };
+    if (v === 'pending') return { title: 'Join the party?', msg: 'You were invited to viewing party ' + party.pendingJoin + '. Join as ' + party.name + '?',
+      buttons: [['Join Party', function () { var c = party.pendingJoin; party.pendingJoin = null; joinParty(c, false); party.view = 'live'; renderParty(); }],
+        ['Not Now', function () { party.pendingJoin = null; history.back(); }]], hint: 'Swipe left/right to choose. Pinch to select.' };
+    if (v === 'join') return { title: 'Join a party', msg: 'Say or type the 6 digit code from ' + them + '\u2019s screen.', input: true,
+      buttons: [['Join', submitCode], ['Cancel', function () { party.view = 'menu'; renderParty(); }]], hint: 'Pinch the box to dictate. Pinch again to join.' };
+    if (v === 'live' && party.net) {
+      var n = peerNames(), msg;
+      if (party.status !== 'online') msg = 'Connecting to party ' + party.code + '\u2026';
+      else if (n.length) msg = n.join(' & ') + ' is here. Pick a movie and it starts on both screens. Pause, play and skips stay in sync.';
+      else msg = 'Waiting for ' + them + '. On her device, open Danflicks, pick Viewing Party, then Join With Code and say ' + party.code.split('').join(' ') + '. Or text this link: ' + SITE + '?party=' + party.code;
+      if (party.name === 'Jen' && !n.length && party.status === 'online') msg = msg.replace('her device', 'his device');
+      return { title: 'Party ' + party.code, msg: msg,
+        buttons: [['Pick a Movie', function () { history.back(); }], ['Leave Party', function () { leaveParty(); party.view = 'menu'; renderParty(); }]],
+        hint: 'Watching as ' + party.name + '. The code stays the same, so next time just pick Rejoin.' };
+    }
+    var btns = [];
+    if (code) btns.push(['Rejoin ' + code, function () { joinParty(code, false); party.view = 'live'; renderParty(); }]);
+    btns.push([code ? 'New Party' : 'Start Party', function () { joinParty(String(100000 + Math.floor(Math.random() * 900000)), true); party.view = 'live'; renderParty(); }]);
+    btns.push(['Join With Code', function () { party.view = 'join'; party.choice = 0; renderParty(); }]);
+    return { title: 'Viewing Party', msg: 'Watch the same movie together with ' + them + '. Whoever picks a movie starts it on both screens, and pause, play and skips stay in sync.',
+      buttons: btns, hint: 'Watching as ' + party.name + '. Swipe down to switch names.' };
+  }
+  function setName(n) {
+    party.name = n; try { localStorage.setItem(PNAME, n); } catch (e) {}
+    party.view = party.pendingJoin ? 'pending' : (party.net ? 'live' : 'menu'); party.choice = 0; renderParty();
+  }
+  function submitCode() {
+    var c = $('partyCode').value.replace(/\D/g, '');
+    if (c.length !== 6) { $('partyMessage').textContent = 'That code needs 6 digits. Try again.'; $('partyCode').focus(); return; }
+    joinParty(c, false); party.view = 'live'; party.choice = 0; renderParty();
+  }
+  function renderParty() {
+    var v = partyView(), inp = $('partyCode');
+    party.buttons = v.buttons;
+    if (party.choice >= v.buttons.length) party.choice = 0;
+    $('partyTitle').textContent = v.title;
+    $('partyMessage').textContent = v.msg;
+    $('partyHint').textContent = v.hint || '';
+    var wasInput = inp.style.display === 'block';
+    inp.style.display = v.input ? 'block' : 'none';
+    if (v.input && !wasInput) { inp.value = ''; inp.focus(); }
+    if (!v.input && document.activeElement === inp) $('focusSink').focus();
+    for (var i = 0; i < 3; i++) {
+      var b = $('partyB' + i), d = v.buttons[i];
+      b.hidden = !d; if (d) b.textContent = d[0];
+      b.classList.toggle('sel', !!d && i === party.choice && !(v.input && document.activeElement === inp));
+    }
+  }
+  function openParty() {
+    mode = 'party'; party.choice = 0;
+    party.view = !party.name ? 'who' : party.pendingJoin ? 'pending' : party.net ? 'live' : 'menu';
+    history.pushState({ screen: 'party' }, '');
+    show('partyScreen');
+    renderParty();
+  }
+  [0, 1, 2].forEach(function (i) {
+    $('partyB' + i).addEventListener('click', function () {
+      if (Date.now() - lastKeyAt < 500 || mode !== 'party') return; // pinch already handled
+      var d = party.buttons[i]; if (d) { party.choice = i; d[1](); }
+    });
+  });
+  $('partyCode').addEventListener('change', function () { if (mode === 'party' && party.view === 'join') submitCode(); });
+  // Phones and tablets: tap the movie to pause or play.
+  $('player').addEventListener('pointerup', function (e) {
+    if (e.pointerType !== 'touch' || mode !== 'player' || Date.now() - lastKeyAt < 500) return;
+    if (vid.paused) vid.play(); else vid.pause();
+    toast(vid.paused ? '\u275a\u275a' : '\u25b6'); pokeHud();
+  });
+  window.addEventListener('pagehide', function () { if (party.net) psend({ k: 'bye' }); });
+
   // ---------- Navigation ----------
   window.addEventListener('popstate', function (e) {
     var s = e.state || { screen: 'home' };
@@ -516,12 +731,30 @@
     if (s.screen === 'show' && s.archive) { if (currentShow && currentShow.id === s.archive) renderShow(); else openArchiveItem({ id: s.archive, title: s.title }, false); }
     else if (s.screen === 'show') { currentShow = BY[s.id]; renderShow(); }
     else if (s.screen === 'browse' && browse) { currentShow = null; mode = 'browse'; renderBrowse(); }
-    else if (s.screen === 'player' || s.screen === 'search') { history.back(); }
+    else if (s.screen === 'player' || s.screen === 'search' || s.screen === 'party') { history.back(); }
     else { currentShow = null; renderHome(); }
   });
 
   document.addEventListener('keydown', function (e) {
     var k = e.key;
+    lastKeyAt = Date.now();
+    if (mode === 'party') {
+      var inp = $('partyCode'), n = party.buttons.length;
+      if (document.activeElement === inp) {
+        if (k === 'Enter') { e.preventDefault(); if (inp.value.trim()) submitCode(); }
+        else if (k === 'Escape') { e.preventDefault(); party.view = 'menu'; renderParty(); }
+        else if (k === 'ArrowDown') { e.preventDefault(); $('focusSink').focus(); renderParty(); }
+        return;
+      }
+      if (k === 'Escape' || k === 'Backspace') { history.back(); }
+      else if (k === 'ArrowLeft') { party.choice = Math.max(0, party.choice - 1); renderParty(); }
+      else if (k === 'ArrowRight') { party.choice = Math.min(n - 1, party.choice + 1); renderParty(); }
+      else if (k === 'ArrowDown' && party.view === 'menu') { party.view = 'who'; party.choice = party.name === 'Jen' ? 1 : 0; renderParty(); }
+      else if (k === 'ArrowUp' && party.view === 'join') { inp.focus(); renderParty(); }
+      else if (k === 'Enter' || k === ' ') { var d = party.buttons[party.choice]; if (d) d[1](); }
+      else return;
+      e.preventDefault(); return;
+    }
     if (mode === 'search') {
       if (k === 'Enter') { if ($('q').value.trim()) { e.preventDefault(); runSearch(); } else { $('q').focus(); } }
       else if (k === 'Escape') { e.preventDefault(); history.back(); }
@@ -583,7 +816,8 @@
     else if (k === 'Enter') {
       var it = selectedItem();
       e.preventDefault();
-      if (it.clearHistory) openHistory();
+      if (it.party) openParty();
+      else if (it.clearHistory) openHistory();
       else if (it.credits) { mode = 'credits'; show('creditsScreen'); history.pushState({ screen: 'credits' }, ''); }
       else if (it.search) openSearch(it.search);
       else if (it.wmGenre != null) startLocalBrowse(it.title, wmGenre(it.wmGenre), true);
@@ -603,9 +837,11 @@
   window.addEventListener('online', netState);
   window.addEventListener('offline', netState);
 
-  history.replaceState({ screen: 'home' }, '');
+  var inviteMatch = /[?&]party=(\d{6})/.exec(location.search);
+  history.replaceState({ screen: 'home' }, '', inviteMatch ? location.pathname : undefined);
   renderCredits();
   renderHome();
+  if (inviteMatch) { party.pendingJoin = inviteMatch[1]; openParty(); }
   loadWM().then(function () { if (mode === 'home') renderHome(); }).catch(function () {});
   netState();
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(function () {});

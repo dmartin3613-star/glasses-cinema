@@ -13,7 +13,7 @@
   .screen{position:absolute;inset:0;width:600px;height:600px;display:none}
   .screen.on{display:block}
   .focusable{outline:none}
-  #net{position:absolute;top:16px;right:22px;font-size:16px;color:#ff8a8a;z-index:5}
+  #net{position:absolute;top:40px;right:22px;font-size:16px;color:#ff8a8a;z-index:5}
 
   /* Home: category rows */
   #home .brand{position:absolute;top:14px;left:24px;font-size:18px;letter-spacing:.14em;text-transform:uppercase;color:#7fe6ff}
@@ -76,10 +76,27 @@
   #historyActions button.sel{border-color:#00d4ff;box-shadow:0 0 18px rgba(0,212,255,.45)}
   #historyActions button[hidden]{display:none}
   #historyHint{margin-top:28px;color:#bdbdbd;font-size:18px;line-height:1.5}
+
+  /* Viewing Party */
+  #partyPanel{position:absolute;inset:0;padding:56px 40px}
+  #partyPanel h2{font-size:28px;color:#7fe6ff;margin-bottom:20px}
+  #partyMessage{font-size:22px;line-height:1.45;min-height:150px}
+  #partyCode{display:none;margin-top:8px;width:100%;height:80px;font-size:30px;letter-spacing:.2em;text-align:center;padding:0 20px;
+    border-radius:16px;background:#111;color:#fff;border:3px solid #00d4ff;box-shadow:0 0 18px rgba(0,212,255,.45);outline:none}
+  #partyActions{display:flex;gap:14px;margin-top:22px}
+  #partyActions button{flex:1;min-height:72px;padding:10px;font:600 20px system-ui,sans-serif;
+    color:#f2f2f2;background:#111;border:3px solid #555;border-radius:12px;cursor:pointer}
+  #partyActions button.sel{border-color:#00d4ff;box-shadow:0 0 18px rgba(0,212,255,.45)}
+  #partyActions button[hidden]{display:none}
+  #partyHint{margin-top:24px;color:#bdbdbd;font-size:18px;line-height:1.5}
+  #partyBadge{position:absolute;top:14px;right:22px;font-size:16px;color:#ffd166;z-index:6;display:none}
+  #partyBadge.on{display:block}
+  #pinfo{position:absolute;top:56px;left:30px;right:30px;text-align:center;font-size:17px;color:#ffd166}
 </style>
 </head>
 <body>
 <div id="net"></div>
+<div id="partyBadge"></div>
 
 <section id="home" class="screen on">
   <div class="brand">Danflicks</div>
@@ -109,6 +126,7 @@
   <video id="vid" playsinline preload="metadata"></video>
   <div id="hud">
     <div id="ptitle"></div>
+    <div id="pinfo"></div>
     <div id="state"></div>
     <div id="bar"><div id="fill"></div></div>
     <div id="time"><span id="cur">0:00</span><span id="dur">0:00</span></div>
@@ -145,8 +163,23 @@
   </div>
 </section>
 
+<section id="partyScreen" class="screen" aria-labelledby="partyTitle">
+  <div id="partyPanel">
+    <h2 id="partyTitle">Viewing Party</h2>
+    <p id="partyMessage" role="status" aria-live="polite"></p>
+    <input id="partyCode" type="text" inputmode="numeric" enterkeyhint="go" autocomplete="off" placeholder="Say the code">
+    <div id="partyActions">
+      <button id="partyB0" type="button"></button>
+      <button id="partyB1" type="button"></button>
+      <button id="partyB2" type="button"></button>
+    </div>
+    <p id="partyHint"></p>
+  </div>
+</section>
+
 <div id="focusSink" class="focusable" tabindex="0" style="position:absolute;width:1px;height:1px;opacity:0"></div>
 <script src="library.js"></script>
+<script src="party-net.js"></script>
 <script src="app.js"></script>
 </body>
 </html>
